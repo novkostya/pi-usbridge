@@ -60,13 +60,14 @@ cd /tmp/lt && chmod +x dsload hapload urbstorm
 # its script, which then idles) and take the controller back from usbip-host.
 echo none > /run/server
 killall usbipd vhusbd 2>/dev/null
+# Like "usbip unbind"; usbip-host's files take the bus ID without a newline.
 h=/sys/bus/usb/drivers/usbip-host
 for d in "$h"/[0-9]*; do
 	[ -e "$d" ] || continue
 	b=${d##*/}
-	echo "$b" > "$h/unbind"
-	echo "del $b" > "$h/match_busid"
-	echo "$b" > /sys/bus/usb/drivers/usb/bind
+	printf %s "$b" > "$h/unbind"
+	printf 'del %s' "$b" > "$h/match_busid"
+	printf %s "$b" > "$h/rebind"
 done
 for m in $(cat modules); do insmod "mods/$m.ko" 2>/dev/null; done
 i=0; while { [ ! -e /dev/hidraw0 ] || [ ! -e /dev/snd/pcmC0D0p ]; } && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
