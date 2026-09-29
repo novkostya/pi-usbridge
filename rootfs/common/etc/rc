@@ -80,8 +80,9 @@ fi
 ip link set "$iface" up
 
 if [ "$ip" = dhcp ]; then
-	# -t/-T/-A: retry quickly, the link may still be negotiating.
-	udhcpc -f -R -i "$iface" -x "hostname:$hostname" -t 5 -T 1 -A 3 $UDHCPC_OPTS </dev/null >/dev/null 2>&1 &
+	# Send a discover every second until answered: the link may still be
+	# negotiating, and switches often need a few seconds before forwarding.
+	udhcpc -f -R -i "$iface" -x "hostname:$hostname" -t 10 -T 1 -A 1 $UDHCPC_OPTS </dev/null >/dev/null 2>&1 &
 else
 	ip addr add "$ip" dev "$iface"
 	[ -n "$gateway" ] && ip route add default via "$gateway"

@@ -103,6 +103,35 @@ ip addr; cat /etc/resolv.conf       # network state
 dmesg | grep -i usb                 # USB enumeration problems
 ```
 
+## Updating a running Pi
+
+With the debug image, you can update the Pi over SSH instead of reflashing
+the card. Your settings on the card are kept:
+
+```sh
+./build.sh debug && scripts/deploy.sh root@vhusb
+```
+
+`scripts/deploy.sh root@vhusb prod` switches to the prod image the same way.
+Prod has no SSH, so after that, updates need the SD card again.
+
+## Boot time
+
+Measured on a Zero 2 W + PoE HAT with the debug image, power-on to vhusbd
+accepting connections: about 17.5 s.
+
+| Stage                                   | Time   |
+| --------------------------------------- | ------ |
+| GPU firmware loads the kernel           | ~6.5 s |
+| kernel until `/init`                    | 2.6 s  |
+| USB hub + RTL8152 enumerate             | 2.2 s  |
+| Ethernet auto-negotiation (link up)     | 2.2 s  |
+| DHCP (switch starts forwarding + lease) | ~3 s   |
+| vhusbd starts                           | ~1 s   |
+
+The network steps dominate. If your switch supports it, making the Pi's port
+an edge/portfast port (no STP delay) saves a few seconds of DHCP time.
+
 ## How it works
 
 ```
