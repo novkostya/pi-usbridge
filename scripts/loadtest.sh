@@ -6,10 +6,10 @@
 #
 # Needs the debug image on the Pi and a DualSense plugged into it. It stays
 # silent: the reports turn the motors and trigger effects off and the audio
-# is silence; the USB traffic is the same as a game's. For the duration,
-# vhusbd moves to port 7576 without Bonjour so no client takes the controller
-# (nothing is saved to the SD card). The Pi is rebooted when the test ends or
-# is interrupted, which restores everything. On the Pi:
+# is silence; the USB traffic is the same as a game's. For the duration, the
+# USB server (usbipd or vhusbd) is stopped and the controller taken back from
+# any client (nothing is saved to the SD card). The Pi is rebooted when the
+# test ends or is interrupted, which restores everything. On the Pi:
 #  - dsload: output reports (rumble, triggers, lightbar) at 250 Hz via hidraw,
 #    counting the controller's input reports. With "storm": urbstorm instead,
 #    the same over raw usbfs, cancelling pending transfers like vhusbd does.
@@ -56,13 +56,18 @@ echo "starting the load"
 pi_touched=1
 ssh_ "sh -s $mode" <<'EOF'
 cd /tmp/lt && chmod +x dsload hapload urbstorm
-# Keep clients away from the controller; never save that to the SD card.
-for p in $(ps | while read -r pid _ _ _ cmd; do case "$cmd" in *persist-config*) echo "$pid";; esac; done); do
-	kill -STOP "$p"
+# Keep clients away from the controller: stop the USB server (init restarts
+# its script, which then idles) and take the controller back from usbip-host.
+echo none > /run/server
+killall usbipd vhusbd 2>/dev/null
+h=/sys/bus/usb/drivers/usbip-host
+for d in "$h"/[0-9]*; do
+	[ -e "$d" ] || continue
+	b=${d##*/}
+	echo "$b" > "$h/unbind"
+	echo "del $b" > "$h/match_busid"
+	echo "$b" > /sys/bus/usb/drivers/usb/bind
 done
-{ grep -v -E '^(TCPPort|UseAVAHI)=' /etc/vhusbd/config.ini; echo TCPPort=7576; echo UseAVAHI=0; } > config.test
-cp config.test /etc/vhusbd/config.ini
-killall vhusbd
 for m in $(cat modules); do insmod "mods/$m.ko" 2>/dev/null; done
 i=0; while { [ ! -e /dev/hidraw0 ] || [ ! -e /dev/snd/pcmC0D0p ]; } && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
 [ -e /dev/hidraw0 ] && [ -e /dev/snd/pcmC0D0p ] || { echo "no DualSense found"; exit 1; }

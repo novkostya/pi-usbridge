@@ -43,11 +43,17 @@ for _ in $(seq "$runs"); do
 		/vhusb: dhcp bound/     { lease = t($0) }
 		/vhusb: starting (vhusbd|usbipd)/ { vh = t($0) }
 		END {
-			printf "total %.2fs = firmware %.2fs + kernel %.2fs\n", total, total - vh, vh
+			# Serving = the server running and the Pi having an address.
+			# vhusbd waits for the lease; usbipd starts before it.
+			ready = vh > lease ? vh : lease
+			printf "total %.2fs = firmware %.2fs + kernel %.2fs\n", total, total - ready, ready
 			printf "  kernel start -> /init      %6.2fs\n", init
 			printf "  /init -> eth0 registered   %6.2fs\n", eth - init
 			printf "  eth0 -> link up            %6.2fs\n", link - eth
 			printf "  link up -> DHCP lease      %6.2fs\n", lease - link
-			printf "  DHCP lease -> USB server   %6.2fs\n", vh - lease
+			if (vh > lease)
+				printf "  DHCP lease -> USB server   %6.2fs\n", vh - lease
+			else
+				printf "  (USB server up at %.2fs, before the lease)\n", vh
 		}'
 done

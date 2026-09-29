@@ -1,12 +1,19 @@
 # vhusb-zero
 
 A tiny, single-purpose SD card image that turns a **Raspberry Pi Zero 2 W** into a
-[VirtualHere](https://www.virtualhere.com) USB server: a network USB hub.
+network USB port for a game controller. It speaks **USB/IP**, the open protocol
+built into Linux, with a small server of its own; or runs the
+[VirtualHere](https://www.virtualhere.com) server instead.
 
 I use it to plug a DualSense controller into a Pi next to the TV and play on a
 headless gaming VM through Moonlight. Because the whole USB device goes over the
 network, everything works: adaptive triggers, haptics, touchpad, speaker and mic.
 
+- **Open by default.** USB/IP with Linux's own `usbip-host` driver doing the
+  work, a ~90 KB server, and [usbip-win2](https://github.com/vadimgrn/usbip-win2)
+  on Windows (Microsoft-signed drivers, so no test mode, and anti-cheat is
+  fine). Only the controller is shared, never the Pi's own network adapter,
+  and you can limit which PCs may connect. See [USB/IP](#usbip).
 - **Runs from RAM.** The whole system is a ~250 KB initramfs. The SD card is only
   read at boot, so pulling the power is safe and the card doesn't wear out.
 - **Boots fast.** About 9 seconds from power-on to serving (see
@@ -27,8 +34,9 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
 - **Heals itself, updates safely.** Hardware watchdog, reboot on network
   loss, and remote updates that roll back if the new version doesn't come up.
 - **Easy to read.** One shell script builds everything in about a minute.
-  The kernel and firmware are prebuilt; only BusyBox (plus Dropbear and two
-  small tools for debug) is compiled.
+  The kernel and firmware are prebuilt. Compiled: BusyBox, a few small tools,
+  Dropbear for debug, and one kernel module that carries a fix (see
+  [The usbip-host fix](#the-usbip-host-fix)).
 
 ## Hardware
 
@@ -48,28 +56,30 @@ with `EXTRA_MODULES`, see [Building](#building)).
    ```
 2. Flash `out/vhusb-zero-prod.img` to an SD card with Raspberry Pi Imager,
    balenaEtcher or `dd`.
-3. Optional: edit files on the SD card's `VHUSB` partition:
-   - `vhusb.txt`: hostname, static IP, MAC address (see [Settings](#settings))
-   - `config.ini`: VirtualHere server settings. Add your license here as
-     `License=...`, or enter it from the VirtualHere client (it gets saved).
-   - `vhusbdarm64`: the VirtualHere server binary. It's already there unless
-     you built with `VHUSBD=0` or used a release image. In that case,
-     download [vhusbdarm64](https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64)
-     and copy it here.
-4. Boot the Pi. When the green LED stops blinking and stays on, it has an IP
-   address and the server is up. It shows up in the VirtualHere client
-   automatically (Bonjour), or you can add `vhusb:7575` by hand.
+3. Optional: edit `vhusb.txt` on the SD card's `VHUSB` partition: hostname,
+   static IP, which PCs may connect, ... (see [Settings](#settings)).
+4. Boot the Pi with the controller plugged in. When the green LED stops
+   blinking and stays on, it has an IP address and the server is up.
+5. On the Windows PC, run [windows/setup.ps1](windows/setup.ps1) once as
+   administrator (see [USB/IP](#usbip)). From then on the controller plugged
+   into the Pi shows up on the PC by itself.
+
+For VirtualHere instead, set `server=virtualhere` in `vhusb.txt` and see
+[VirtualHere](#virtualhere).
 
 ## Settings
 
 `vhusb.txt` on the SD card:
 
 ```ini
-hostname=vhusb             # sent to the DHCP server; shown in the VirtualHere client
+hostname=vhusb             # sent to the DHCP server, so the router's DNS knows the Pi as "vhusb"
 ip=dhcp                    # or a static address: 192.168.1.50/24 (/24 if left out)
 gateway=192.168.1.1        # static only
 dns=192.168.1.1            # static only
 mac=                       # empty: adapter's own; "serial": stable MAC derived from the Pi's serial; or 02:12:34:56:78:9a
+server=usbip               # or "virtualhere"
+allow=                     # usbip: PCs that may connect, e.g. "192.168.1.20 192.168.1.0/24"; empty: anyone
+devices=                   # usbip: vendor:product IDs to share; empty: DualSense and DualSense Edge
 netwatch=60                # reboot if the gateway is (mostly) unreachable/slow this long (seconds, 0 = off)
 ```
 
@@ -78,11 +88,98 @@ static IP in the image. The image keeps working when you move it to another
 network, and there's no risk of an address conflict when the router's pool
 changes.
 
-VirtualHere's own settings live in `config.ini` (see the
-[VirtualHere docs](https://www.virtualhere.com/configuration_faq)). The default
-one hides the HAT's Ethernet adapter (`IgnoredDevices=bda/8152`) so a client
-can't take the Pi's network away. When the server changes `config.ini` (license,
-device nicknames, ...), the image copies it back to the SD card within a few
+## USB/IP
+
+The Pi runs `usbipd` ([tools/usbipd.c](tools/usbipd.c)), which answers a
+client's two questions, "what do you have?" and "give me that one", and then
+hands the connection to Linux's `usbip-host` driver, which carries all the
+USB traffic from then on. The server:
+
+- shares only the devices in `devices=` (by default the DualSense and the
+  DualSense Edge), and never a hub or a network adapter, whatever the
+  setting says, so no client can take the Pi's own network away;
+- lets in only the PCs in `allow=`, if set. USB/IP has no passwords or
+  encryption of its own, so this is an IP check; keep the Pi on a network
+  you trust, as with VirtualHere;
+- serves the one shared device whatever bus ID a client asks for, so moving
+  the controller to another USB port of the Pi doesn't break anything;
+- drops a PC that goes away without saying so (VM powered off, cable pulled)
+  within about 10 s, so the controller is free again.
+
+It logs to the kernel log: `dmesg | grep usbipd` on the debug image.
+
+### Windows
+
+[windows/setup.ps1](windows/setup.ps1) installs usbip-win2 (pinned version,
+checked against its checksum) and a startup task that keeps the controller
+attached. In PowerShell as administrator, in the folder with both scripts:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1 -Server vhusb.lan
+```
+
+`-Server` is the Pi's name (or address) as the PC sees it; with most routers
+that's `vhusb.lan` or plain `vhusb`. usbip-win2 reattaches the controller by
+itself, but waits a fixed 30 s after every disconnect; the task
+([usbip-attach.ps1](windows/usbip-attach.ps1)) attaches it within ~2 s of the
+Pi offering it instead. Measured: controller unplugged and plugged back in,
+working again after 1.5 s; Pi rebooted, 13 s from the reboot command.
+
+By hand, `usbip list -r vhusb.lan` shows what the Pi shares and
+`usbip attach -r vhusb.lan -b 1-1.3` attaches it (`usbip.exe` is in
+`C:\Program Files\USBip`).
+
+usbip-win2's release drivers are signed by Microsoft, so they load with
+Secure Boot on and without test mode, which games with anti-cheat
+(EasyAntiCheat and others) refuse.
+
+### Linux
+
+Linux has the client built in (`vhci-hcd` and the `usbip` tool, from your
+distribution's `usbip` or `linux-tools` package):
+`usbip attach -r vhusb -b 1-1.3`. Not tested with this server yet.
+
+### The usbip-host fix
+
+Out of the box, Linux's `usbip-host` can't serve a Zero 2 W to usbip-win2.
+The protocol has clients send `number_of_packets = 0xffffffff` on ordinary
+(non-isochronous) transfers; `usbip-host` passes that on to the USB driver;
+and `dwc2`, the Pi's USB controller driver, sizes a buffer by it, so every
+transfer fails with `-ENOMEM` and a kernel warning. Linux's own client sends 0
+there, and most other USB controllers ignore the field, so this only shows up
+on Pis with this controller (Zero, Zero 2, 3) serving usbip-win2.
+[patches/linux/0001](patches/linux/0001-usbip-stub_rx-zero-number_of_packets-of-non-isochron.patch)
+fixes it in `usbip-host`, in a form that could go upstream.
+
+So this is the one kernel module the build compiles. `build.sh` builds it from
+the prebuilt kernel's own source (`KERNEL_COMMIT`, the firmware's
+`extra/git_hash`), its own config (extracted from its `configs.ko`) and its
+symbol versions (`extra/Module8.symvers`), and stops unless the result has
+the same vermagic and symbol CRCs as the stock module, so the running kernel
+takes it like one of its own. The CRCs are computed from type definitions,
+which include compiler-dependent attributes; [patches/linux/0002](patches/linux/0002-kconfig-compiler-features-of-gcc-11.4.patch)
+makes the build see the features of gcc 11.4, which built the Pi's kernel.
+
+`scripts/usbip-probe.py HOST --attach` sends exactly the kind of request that
+broke; in QEMU (below) it fails with the stock module and passes with ours.
+
+## VirtualHere
+
+With `server=virtualhere`, the Pi runs the
+[VirtualHere](https://www.virtualhere.com) server instead of `usbipd`. It
+needs the server binary on the SD card as `vhusbdarm64`. It's already there
+unless you built with `VHUSBD=0` or used a release image; in that case
+download [vhusbdarm64](https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64)
+and copy it there. Clients find it by themselves (Bonjour), or add
+`vhusb:7575` by hand. The free version shares one device at a time; a
+[license](https://www.virtualhere.com/purchase) removes that limit.
+
+Its settings live in `config.ini` on the card (see the
+[VirtualHere docs](https://www.virtualhere.com/configuration_faq)); add a
+license as `License=...` there or from the client. The default hides the
+HAT's Ethernet adapter (`IgnoredDevices=bda/8152`) so a client can't take the
+Pi's network away. When the server changes `config.ini` (license, device
+nicknames, ...), the image copies it back to the SD card within a few
 seconds. Apart from updates, that's the only time the card is written to.
 
 ## Self-healing
@@ -119,7 +216,8 @@ The debug image boots the same way and adds:
   first boot and saved to the SD card.
 - **Serial console** with a root shell on GPIO14 (TX) / GPIO15 (RX), 115200 8N1.
   Kernel messages are shown there too.
-- **Logs**: `logread` (`-f` to follow) for vhusbd, DHCP and kernel messages, plus `dmesg`.
+- **Logs**: `logread` (`-f` to follow) for DHCP, vhusbd and kernel messages,
+  and `dmesg` (usbipd logs there).
 - **Tools**: `ps`, `top`, `ping`, `nslookup`, `wget`, `netstat`, `nc`, `lsusb`,
   `vi`, `less`, ... and `get_throttled` (the firmware's under-voltage and
   throttling flags, like `vcgencmd get_throttled`).
@@ -127,7 +225,8 @@ The debug image boots the same way and adds:
 Some useful commands:
 
 ```sh
-logread | grep -E 'vhusbd|udhcpc'   # server and DHCP events
+dmesg | grep -E 'usbipd|usbip-host' # USB/IP: who attached what
+logread | grep -E 'vhusbd|udhcpc'   # VirtualHere and DHCP events
 lsusb                               # what's plugged in
 ip addr; cat /etc/resolv.conf       # network state
 dmesg | grep -i usb                 # USB enumeration problems
@@ -148,7 +247,7 @@ A broken update can't brick it:
    Only changed files cross the network, and everything is checksummed.
 2. The Pi reboots into it once, using the firmware's one-shot `tryboot`
    flag (`tryboot.txt` is the new `config.txt` plus `os_prefix=next/`).
-3. The new system checks itself: vhusbd listening, an IP address, gateway
+3. The new system checks itself: its USB server listening, an IP address, gateway
    answering. If it's healthy, it moves `/boot/next` into place and becomes
    permanent. If it isn't within 90 s, it reboots. If it crashes or hangs, the
    hardware watchdog or `panic=5` reboots it. Any reboot, or a power cut,
@@ -162,8 +261,9 @@ again.
 
 ## Boot time
 
-About 8.9 s from power-on to vhusbd accepting connections (Zero 2 W +
-PoE HAT, measured with `scripts/boottime.sh`):
+About 8.9 s from power-on to the server accepting connections (Zero 2 W +
+PoE HAT, measured with `scripts/boottime.sh`; the same for usbipd and
+vhusbd):
 
 | Stage                                  | Time   |
 | -------------------------------------- | ------ |
@@ -172,7 +272,7 @@ PoE HAT, measured with `scripts/boottime.sh`):
 | USB hub + RTL8152 enumerate            | 1.3 s  |
 | Ethernet auto-negotiation (link up)    | 2.2 s  |
 | DHCP lease                             | 0.2 s  |
-| vhusbd starts                          | <0.1 s |
+| server reachable                       | <0.1 s |
 
 What got it there (from ~17.5 s):
 
@@ -185,7 +285,8 @@ What got it there (from ~17.5 s):
 - **Keep the DHCP lease.** Releasing it at shutdown made dnsmasq treat the
   Pi as a new client every boot and ping the address for ~3 s before
   answering. udhcpc also starts the moment the link comes up.
-- **No restart delay** before the first vhusbd start.
+- **No restart delay** before the first vhusbd start. usbipd starts before
+  the network is up and is reachable the moment the Pi has an address.
 
 The remaining time is mostly hardware: the GPU boot stage, USB enumeration
 and Ethernet link negotiation.
@@ -197,7 +298,8 @@ firmware (bootcode.bin, start_cd.elf)
   └─ kernel8.img + initramfs.cpio.gz (stock Raspberry Pi kernel, busybox userland)
        └─ /init = busybox init, reads /etc/inittab
             ├─ /etc/rc (once): mount, load drivers, read /boot/vhusb.txt, start DHCP
-            ├─ /etc/init.d/vhusbd          (restarted if it exits)
+            ├─ /etc/init.d/usbipd          (server=usbip; restarted if it exits)
+            ├─ /etc/init.d/vhusbd          (server=virtualhere; restarted if it exits)
             ├─ /etc/init.d/persist-config  (saves config.ini changes to the SD card)
             ├─ /etc/init.d/watchdog        (hardware watchdog, reboots on hang)
             ├─ /etc/init.d/netwatch        (reboots if the gateway stops answering)
@@ -210,12 +312,16 @@ firmware (bootcode.bin, start_cd.elf)
 | `versions.sh`             | pinned versions and checksums of everything downloaded |
 | `config/firmware.sha256`  | checksums of the firmware/kernel files used            |
 | `config/busybox-*.config` | exactly which BusyBox applets each variant gets        |
+| `tools/usbipd.c`          | the USB/IP server                                      |
+| `patches/linux/`          | the usbip-host fix, and the build-only kconfig patch   |
+| `windows/`                | Windows client setup and the attach task               |
 | `rootfs/common`, `rootfs/debug` | files copied into the initramfs                  |
 | `boot/`                   | files copied onto the SD card                          |
 | `scripts/deploy.sh`       | update a running Pi, with automatic rollback           |
 | `scripts/boottime.sh`     | reboot a Pi and show where the boot time goes          |
 | `scripts/loadtest.sh`     | drive USB and network like a game, PASS/FAIL           |
 | `scripts/qemu-test.sh`    | boot an image in QEMU (`QEMU_TRIAL=1`: as a trial boot) |
+| `scripts/usbip-probe.py`  | list a USB/IP server's devices, test one end to end    |
 
 ### Why not Buildroot?
 
@@ -223,21 +329,24 @@ Buildroot works fine for this, but it's a lot of machinery for a system this
 small: thousands of options, a from-source kernel and toolchain, and 30+
 minute builds. Here the kernel and firmware are the official prebuilt ones,
 the same ones Raspberry Pi OS uses. So the hardware support is well tested,
-and updating the kernel is a one-line change in `versions.sh`. The only things
-we compile are BusyBox and Dropbear, with a prebuilt musl toolchain.
+and updating the kernel is a few lines in `versions.sh`. We compile BusyBox,
+Dropbear and our small tools with a prebuilt musl toolchain, plus the one
+patched kernel module, checked to fit the prebuilt kernel exactly.
 
 ## Building
 
 Needs an x86_64 Linux host. On Debian/Ubuntu:
 
 ```sh
-sudo apt install build-essential curl cpio bzip2 xz-utils dosfstools mtools fdisk
+sudo apt install build-essential curl cpio bzip2 xz-utils dosfstools mtools fdisk \
+  patch flex bison bc
 ./build.sh            # both variants -> out/vhusb-zero-{prod,debug}.img
 ```
 
 No root needed: it works in an unprivileged container. Downloads are cached in
 `dl/` and checked against the checksums in `versions.sh` and
-`config/firmware.sha256`.
+`config/firmware.sha256`. The first build also downloads the kernel source
+(260 MB) for the usbip-host module and needs ~1.5 GB for it in `build/`.
 
 Builds are reproducible: building the same commit gives byte-identical
 images, so anyone can check a release image against the source. Images that
@@ -252,14 +361,16 @@ Environment variables:
 
 ### Testing in QEMU
 
-QEMU's `raspi3b` machine has the same SoC family. The test swaps in an emulated
-USB network adapter for the HAT:
+QEMU's `raspi3b` machine has the same SoC family and the same `dwc2` USB
+controller. The test swaps in an emulated USB network adapter for the HAT, and
+shares an emulated USB keyboard over USB/IP:
 
 ```sh
 sudo apt install qemu-system-arm device-tree-compiler
 EXTRA_MODULES=cdc_ether ./build.sh debug
 scripts/qemu-test.sh debug        # Ctrl-a x to quit
 ssh -p 2222 root@localhost        # from another terminal
+scripts/usbip-probe.py localhost --attach   # USB/IP end to end
 ```
 
 `QEMU_TRIAL=1 scripts/qemu-test.sh debug` boots it as if it were the trial
@@ -294,20 +405,25 @@ fixes that; it does catch regressions in everyday traffic.
 
 - **Kernel/firmware**: set `FIRMWARE_TAG` and `KERNEL_VERSION` in `versions.sh`
   (see the [firmware tags](https://github.com/raspberrypi/firmware/tags);
-  `extra/uname_string8` in the tag has the kernel version). Then regenerate
-  `config/firmware.sha256` for the files listed there.
+  `extra/uname_string8` in the tag has the kernel version), and
+  `KERNEL_COMMIT` (`extra/git_hash`) with the source tarball's checksum. Then
+  regenerate `config/firmware.sha256` for the files listed there. The build
+  checks that the usbip-host module still fits; if the patches stop
+  applying, they need updating.
 - **BusyBox, Dropbear, toolchain**: bump the version and checksum in `versions.sh`.
 
 ## Licensing
 
 The scripts in this repository are MIT licensed. The images contain:
 
-- Linux kernel and BusyBox (GPL-2.0), Dropbear (MIT). Built from unmodified
-  upstream sources pinned in `versions.sh`.
+- Linux kernel and BusyBox (GPL-2.0), Dropbear (MIT), from the upstream
+  sources pinned in `versions.sh`. The kernel is Raspberry Pi's prebuilt one;
+  its `usbip-host` module is rebuilt with the patch in `patches/linux/`.
 - Raspberry Pi firmware (`LICENCE.broadcom`, redistributable).
-- The VirtualHere USB server, which is proprietary. Release images are built
-  with `VHUSBD=0` and don't include it, so you copy `vhusbdarm64` onto the SD
-  card yourself. The free version shares one device at a time; a
-  [license](https://www.virtualhere.com/purchase) removes that limit.
+- Optionally the VirtualHere USB server, which is proprietary. Release images
+  are built with `VHUSBD=0` and don't include it; see [VirtualHere](#virtualhere).
+
+On Windows, [usbip-win2](https://github.com/vadimgrn/usbip-win2) (GPL-3.0) is
+downloaded from its own releases by `windows/setup.ps1`.
 
 This project isn't affiliated with VirtualHere, Raspberry Pi or Waveshare.
