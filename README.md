@@ -162,6 +162,15 @@ on Pis with this controller (Zero, Zero 2, 3) serving usbip-win2.
 [patches/linux/0001](patches/linux/0001-usbip-stub_rx-zero-number_of_packets-of-non-isochron.patch)
 fixes it in `usbip-host`, in a form that could go upstream.
 
+The second fix is for isochronous and interrupt endpoints: usbip-win2 sends
+an endpoint's `bInterval` as the URB's interval, which for high-speed devices
+is an exponent, and `usbip-host` took it as a number of microframes. A
+DualSense's audio endpoint (haptics and speaker, 1 ms) was served every
+0.5 ms, playing its haptics in bursts at double speed, which felt like plain
+rumble. [patches/linux/0003](patches/linux/0003-usbip-stub_rx-take-the-interval-of-periodic-URBs-fro.patch)
+takes the interval from the endpoint instead, as the kernel does for programs
+using USB directly (and VirtualHere).
+
 So this is the one kernel module the build compiles. `build.sh` builds it from
 the prebuilt kernel's own source (`KERNEL_COMMIT`, the firmware's
 `extra/git_hash`), its own config (extracted from its `configs.ko`) and its
