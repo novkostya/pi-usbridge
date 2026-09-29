@@ -1,0 +1,86 @@
+From c69d7e0554157b28f666186a3c87eea70848f251 Mon Sep 17 00:00:00 2001
+From: Konstantin Novikov <novkostya@gmail.com>
+Date: Tue, 29 Sep 2026 18:42:58 +0000
+Subject: [PATCH] usbip: stub_rx: take the interval of periodic URBs from the
+ endpoint
+
+CMD_SUBMIT carries an interval, which stub_recv_cmd_submit() copies into
+the URB through usbip_pack_pdu(). The protocol documentation doesn't say
+what units it is in ("maximum time for the request on the server-side
+host controller"). vhci-hcd sends urb->interval, in frames or microframes
+depending on the device's speed. usbip-win2, the Windows client, sends the
+endpoint's bInterval, which for high-speed endpoints (and full-speed
+isochronous ones) is an exponent.
+
+So a high-speed isochronous endpoint with bInterval 4 (2^3 microframes,
+1 ms) gets URBs with interval 4, and the host controller serves it every
+4 microframes, twice as often as it should. With a DualSense controller
+(054c:0ce6) on a Raspberry Pi (dwc2) and a Windows client, each 10-packet
+URB of its audio OUT endpoint completed in 5 ms instead of 10: its audio
+and haptics played in bursts at double speed, and Windows' usb audio
+driver reset the pipe about 20 times a second. Its interrupt endpoints
+(bInterval 6, 4 ms) were polled every 0.5 ms.
+
+Take the interval of interrupt and isochronous URBs from the endpoint
+descriptor, as usbfs does, instead of the client's. For Linux clients
+it's the value they send anyway.
+
+Fixes: 4d7b5c7f8ad4 ("Staging: USB/IP: add host driver")
+Cc: stable@vger.kernel.org
+Signed-off-by: Konstantin Novikov <novkostya@gmail.com>
+---
+ drivers/usb/usbip/stub_rx.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/drivers/usb/usbip/stub_rx.c b/drivers/usb/usbip/stub_rx.c
+index dc68a1d..9527553 100644
+--- a/drivers/usb/usbip/stub_rx.c
++++ b/drivers/usb/usbip/stub_rx.c
+@@ -396,6 +396,26 @@ err_ret:
+ 	return -1;
+ }
+ 
++/*
++ * The interval of a periodic URB, from its endpoint: in frames for full- and
++ * low-speed devices, microframes for high-speed ones (as for usbfs URBs).
++ */
++static int stub_interval(struct usb_device *udev, int pipe)
++{
++	struct usb_host_endpoint *ep = usb_pipe_endpoint(udev, pipe);
++	int interval;
++
++	if (!ep)
++		return 1;
++
++	interval = ep->desc.bInterval;
++	/* An exponent, except for full- and low-speed interrupt endpoints */
++	if (udev->speed >= USB_SPEED_HIGH || usb_pipeisoc(pipe))
++		interval = 1 << (clamp(interval, 1, 16) - 1);
++
++	return interval;
++}
++
+ static void masking_bogus_flags(struct urb *urb)
+ {
+ 	int				xfertype;
+@@ -598,6 +618,17 @@ static void stub_recv_cmd_submit(struct stub_device *sdev,
+ 		if (!usb_pipeisoc(pipe))
+ 			priv->urbs[i]->number_of_packets = 0;
+ 
++		/*
++		 * The protocol doesn't say in what units the interval of a
++		 * periodic transfer is: Linux clients send urb->interval,
++		 * usbip-win2 sends bInterval. For high-speed endpoints the
++		 * latter is an exponent, so taken as it is, an isochronous
++		 * endpoint with bInterval 4 (1 ms) would be served every 4
++		 * microframes, twice as often as it should. The endpoint knows.
++		 */
++		if (usb_pipeint(pipe) || usb_pipeisoc(pipe))
++			priv->urbs[i]->interval = stub_interval(udev, pipe);
++
+ 		/*
+ 		 * all URBs belong to a single PDU, so a global is_tweaked flag is
+ 		 * enough
+-- 
+2.47.3
+
