@@ -15,6 +15,9 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
   hostname, so your router's DNS knows it as `vhusb`. Static IP is one line
   in a text file.
 - **Built for low latency.** CPU pinned at full speed, USB autosuspend off.
+- **Stable under load.** Uses the mainline `dwc2` USB driver: with the Pi's
+  default `dwc_otg`, a game driving the DualSense's triggers and haptics
+  stalled the whole USB bus, Ethernet included.
 - **Two variants from the same source.** `prod` has only what's needed. `debug`
   adds SSH, a serial console, logs and troubleshooting tools.
 - **Easy to read.** One shell script builds everything in a couple of minutes.

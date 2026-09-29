@@ -21,6 +21,8 @@ dtoverlay=disable-bt
 # No serial console (the debug image turns it on).
 enable_uart=0
 
-# USB host driver. Default: Raspberry Pi's dwc_otg. Uncomment to use the
-# mainline dwc2 driver instead.
-#dtoverlay=dwc2,dr_mode=host
+# USB host driver: mainline dwc2 instead of Raspberry Pi's default dwc_otg.
+# With dwc_otg, a game driving the DualSense's triggers/haptics through
+# VirtualHere stalled the whole USB bus, Ethernet included, until a power
+# cycle. Remove this line to go back to dwc_otg.
+dtoverlay=dwc2,dr_mode=host
