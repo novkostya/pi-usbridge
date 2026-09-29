@@ -4,11 +4,14 @@
 # administrator:
 #
 #   powershell -ExecutionPolicy Bypass -File setup.ps1 [-Server usbridge.local]
+#       [-ReceiveMode zero-copy|low-latency]
 #
 # Undo: Unregister-ScheduledTask 'pi-usbridge attach'; uninstall "USBip" in
 # Settings > Apps; delete $env:ProgramData\pi-usbridge.
 param(
-	[string]$Server = 'usbridge.local'
+	[string]$Server = 'usbridge.local',
+	[ValidateSet('zero-copy', 'low-latency')]
+	[string]$ReceiveMode = 'zero-copy'
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -49,7 +52,7 @@ if (Get-ScheduledTask $name -ErrorAction SilentlyContinue) {
 }
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (
 	"-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass " +
-	"-File `"$script`" -Server $Server")
+	"-File `"$script`" -Server $Server -ReceiveMode $ReceiveMode")
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
 	-RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
 	-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries

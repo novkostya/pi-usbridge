@@ -7,13 +7,19 @@
 # disconnect (Pi rebooted, device replugged); this attaches within ~2 s of a
 # device being offered. setup.ps1 runs it at startup as a scheduled task.
 #
-#   usbip-attach.ps1 [-Server usbridge.local] [-Port 3240] [-Once]
+#   usbip-attach.ps1 [-Server usbridge.local] [-Port 3240]
+#                    [-ReceiveMode zero-copy|low-latency] [-Once]
+#
+# -ReceiveMode is how usbip-win2 receives device data: zero-copy (its default)
+# or low-latency, which it recommends for small, frequent transfers.
 #
 # It looks the name up itself and gives usbip the address: usbip-win2's
 # driver resolves names with plain DNS only, so not .local ones.
 param(
 	[string]$Server = 'usbridge.local',
 	[int]$Port = 3240,
+	[ValidateSet('zero-copy', 'low-latency')]
+	[string]$ReceiveMode = 'zero-copy',
 	[switch]$Once  # one round, for testing
 )
 $usbip = Join-Path $env:ProgramFiles 'USBip\usbip.exe'
@@ -131,7 +137,7 @@ function Attach-From([string]$ip, [int]$p) {
 	foreach ($busid in $offered) {
 		if ($attached -contains $busid) { continue }
 		# Fails while another PC has the device; retried every 2 s.
-		$out = (& $usbip -t $p attach -r $ip -b $busid --once 2>&1) -join ' '
+		$out = (& $usbip -t $p attach -r $ip -b $busid --once --receive-mode $ReceiveMode 2>&1) -join ' '
 		$key = "${ip}:$p/$busid"
 		if ($last[$key] -ne $out) { Say "attach $busid from ${ip}:${p}: $out" }
 		$last[$key] = $out
@@ -139,21 +145,20 @@ function Attach-From([string]$ip, [int]$p) {
 }
 
 $ip = $null
-$seen = @()
-Say "started: $Server port $Port, and Moonlight USBridge streaming from here"
+$seen = @{}  # exporter -> when it last answered: log arrivals, not every missed answer
+Say "started: $Server port $Port, and Moonlight USBridge streaming from here; $ReceiveMode"
 while ($true) {
 	if (-not ($ip -and (Reachable $ip $Port))) {
 		$ip = Address  # new or changed address, or the Pi is down
 		if ($ip -and -not (Reachable $ip $Port)) { $ip = $null }
 	}
 	if ($ip) { Attach-From $ip $Port }
-	$exporters = @(Exporters)
-	foreach ($e in $exporters) {
-		if ($seen -notcontains $e) { Say "Moonlight USBridge at $e" }
+	foreach ($e in @(Exporters)) {
+		if (-not $seen[$e] -or ((Get-Date) - $seen[$e]).TotalSeconds -gt 30) { Say "Moonlight USBridge at $e" }
+		$seen[$e] = Get-Date
 		$host_, $p = $e -split ':'
 		Attach-From $host_ ([int]$p)
 	}
-	$seen = $exporters
 	if ($Once) { break }
 	Start-Sleep -Seconds 2
 }
