@@ -137,7 +137,8 @@ initramfs() {
 		cp "$BUILD/dropbear-$DROPBEAR_VERSION/dropbearmulti" "$root/usr/sbin/"
 		for p in dropbear dropbearkey scp; do ln -s dropbearmulti "$root/usr/sbin/$p"; done
 	fi
-	for m in r8152 $EXTRA_MODULES; do
+	# r8152: the HAT's Ethernet. raspberrypi-hwmon: logs "Undervoltage detected!".
+	for m in r8152 raspberrypi-hwmon $EXTRA_MODULES; do
 		ko=$(awk -v m="/$m.ko.xz" 'index($2, m) { print $2 }' "$TOP/config/firmware.sha256")
 		[ -n "$ko" ] || die "module $m is not listed in config/firmware.sha256"
 		firmware "$ko"

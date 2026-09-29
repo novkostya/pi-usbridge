@@ -9,5 +9,6 @@ ea69d22dedc607fee75eec57d8a4cc0f0eab93cd75393e61a64c49fbac912d02  boot/overlays/
 86aa3709da415b8be306aacfe2b0261a601e2e0b2523281d5eb72093b379d892  boot/overlays/disable-wifi.dtbo
 2d4617de880e377a6a63ee1a642ec69b22700ed1b74d0e89bc5e7653b333121a  boot/overlays/overlay_map.dtb
 ba2e8d34524bcac1ffdc138d981fd4ce4f9498c4e01dc9c1ef701a473a08791e  boot/start_cd.elf
+1793ab1ee2cdec9c23a16485329acb8483aacbdcf766a09cb6fc4859dfcfd169  modules/6.18.50-v8+/kernel/drivers/hwmon/raspberrypi-hwmon.ko.xz
 65b2b14d2a2dcae5060f571d9d3736221594ceee506dc095b372a590068cb374  modules/6.18.50-v8+/kernel/drivers/net/usb/cdc_ether.ko.xz
 ce78e94e3394fa0f1bcc056988322397d2174b3cda71a8f25dc0bb14e99db822  modules/6.18.50-v8+/kernel/drivers/net/usb/r8152.ko.xz

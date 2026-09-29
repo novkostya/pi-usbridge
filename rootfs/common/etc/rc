@@ -17,7 +17,7 @@ for g in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor; do
 	[ -w "$g" ] && echo performance > "$g"
 done
 
-# Ethernet driver (the only module we need).
+# Kernel modules: Ethernet driver, under-voltage warnings.
 for m in /lib/modules/*.ko; do
 	[ -e "$m" ] && insmod "$m"
 done
