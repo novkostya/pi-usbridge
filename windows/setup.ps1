@@ -3,12 +3,12 @@
 # Pi's USB devices attached (usbip-attach.ps1). Run in PowerShell as
 # administrator:
 #
-#   powershell -ExecutionPolicy Bypass -File setup.ps1 [-Server usbridge.lan]
+#   powershell -ExecutionPolicy Bypass -File setup.ps1 [-Server usbridge.local]
 #
 # Undo: Unregister-ScheduledTask 'pi-usbridge attach'; uninstall "USBip" in
 # Settings > Apps; delete $env:ProgramData\pi-usbridge.
 param(
-	[string]$Server = 'usbridge.lan'
+	[string]$Server = 'usbridge.local'
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -41,8 +41,11 @@ Copy-Item (Join-Path $PSScriptRoot 'usbip-attach.ps1') $dir -Force
 $script = Join-Path $dir 'usbip-attach.ps1'
 $name = 'pi-usbridge attach'
 if (Get-ScheduledTask $name -ErrorAction SilentlyContinue) {
+	# Replacing the task: detach what the old one attached, the new one
+	# attaches it again within seconds with its own settings.
 	Stop-ScheduledTask $name
 	Unregister-ScheduledTask $name -Confirm:$false
+	& $usbip detach --all | Out-Null
 }
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (
 	"-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass " +

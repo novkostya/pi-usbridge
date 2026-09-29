@@ -203,6 +203,7 @@ initramfs() {
 		for p in dropbear dropbearkey scp; do ln -s dropbearmulti "$root/usr/sbin/$p"; done
 	fi
 	"$(cross)gcc" -static -Os -s -Wall -o "$root/usr/sbin/usbipd" "$TOP/tools/usbipd.c"
+	"$(cross)gcc" -static -Os -s -Wall -o "$root/usr/sbin/mdnsd" "$TOP/tools/mdnsd.c"
 	# r8152: the HAT's Ethernet. raspberrypi-hwmon: logs "Undervoltage detected!".
 	# usbip-core, and usbip-host built with our fix (usbip_host above): USB/IP.
 	# usbmon (debug): USB traffic capture, /sys/kernel/debug/usb/usbmon.

@@ -19,10 +19,12 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
   read at boot, so pulling the power is safe and the card doesn't wear out.
 - **Boots fast.** About 9 seconds from power-on to serving (see
   [Boot time](#boot-time)).
-- **Just works on any network.** Gets its address over DHCP and sends its
-  hostname, so your router's DNS knows it as `usbridge`. Plugged straight into a
-  PC without a router, it takes a link-local 169.254.x.x address like the PC
-  does. Static IP is one line in a text file.
+- **Just works on any network.** Gets its address over DHCP and answers
+  multicast DNS, so PCs find it as `usbridge.local` whatever the router
+  (many routers' DNS also knows it as `usbridge`). Plugged straight into a PC
+  without a router, it takes a link-local 169.254.x.x address like the PC
+  does, and `usbridge.local` still works. Static IP is one line in a text
+  file.
 - **Built for low latency.** CPU pinned at full speed, USB autosuspend off.
   That costs about 4 °C at idle (56 °C vs 52 °C with on-demand scaling, in
   the PoE HAT).
@@ -115,20 +117,27 @@ checked against its checksum) and a startup task that attaches everything the
 Pi shares. In PowerShell as administrator, in the folder with both scripts:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File setup.ps1 -Server usbridge.lan
+powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-`-Server` is the Pi's name (or address) as the PC sees it; with most routers
-that's `usbridge.lan` or plain `usbridge`. usbip-win2 reattaches devices by itself,
-but waits a fixed 30 s after every disconnect; the task
+It finds the Pi as `usbridge.local`; if you changed its hostname, or use an
+address, add `-Server <name or address>`. usbip-win2 reattaches devices by
+itself, but waits a fixed 30 s after every disconnect; the task
 ([usbip-attach.ps1](windows/usbip-attach.ps1)) attaches a device within ~2 s
 of the Pi offering it instead. Measured with a DualSense: unplugged and
-plugged back in, working again after 1.5–3 s; Pi rebooted, 13 s from the
+plugged back in, working again after 1.5–2 s; Pi rebooted, 12 s from the
 reboot command. A device another PC is using is retried until it's free.
 
-By hand, `usbip list -r usbridge.lan` shows what the Pi shares and
-`usbip attach -r usbridge.lan -b 1-1.3` attaches it (`usbip.exe` is in
-`C:\Program Files\USBip`).
+By hand (`usbip.exe` is in `C:\Program Files\USBip`): `usbip list -r
+usbridge.local` shows what the Pi shares, and `usbip attach -r 192.168.1.50 -b
+1-1.3` attaches a device. `attach` needs the address or a name your DNS
+server knows (e.g. `usbridge.lan`): usbip-win2's driver looks names up with
+plain DNS only, not `.local`. The task looks the name up itself for that
+reason.
+
+A `.local` lookup takes Windows ~2.7 s when it isn't cached: it waits for an
+IPv6 address, which the Pi doesn't have, and ignores the Pi's answer saying
+so. The task keeps the address once it has it.
 
 usbip-win2's release drivers are signed by Microsoft, so they load with
 Secure Boot on and without test mode, which games with anti-cheat
@@ -138,7 +147,8 @@ Secure Boot on and without test mode, which games with anti-cheat
 
 Linux has the client built in (`vhci-hcd` and the `usbip` tool, from your
 distribution's `usbip` or `linux-tools` package):
-`usbip attach -r usbridge -b 1-1.3`. Not tested with this server yet.
+`usbip attach -r usbridge.local -b 1-1.3` (`.local` names need nss-mdns,
+which most desktop distributions have). Not tested with this server yet.
 
 ### The usbip-host fix
 
@@ -307,6 +317,7 @@ firmware (bootcode.bin, start_cd.elf)
        └─ /init = busybox init, reads /etc/inittab
             ├─ /etc/rc (once): mount, load drivers, read /boot/usbridge.txt, start DHCP
             ├─ /etc/init.d/usbipd          (server=usbip; restarted if it exits)
+            ├─ /etc/init.d/mdnsd           (server=usbip: answers for usbridge.local)
             ├─ /etc/init.d/vhusbd          (server=virtualhere; restarted if it exits)
             ├─ /etc/init.d/persist-config  (saves config.ini changes to the SD card)
             ├─ /etc/init.d/watchdog        (hardware watchdog, reboots on hang)
@@ -321,6 +332,7 @@ firmware (bootcode.bin, start_cd.elf)
 | `config/firmware.sha256`  | checksums of the firmware/kernel files used            |
 | `config/busybox-*.config` | exactly which BusyBox applets each variant gets        |
 | `tools/usbipd.c`          | the USB/IP server                                      |
+| `tools/mdnsd.c`           | answers mDNS queries for `<hostname>.local`            |
 | `patches/linux/`          | the usbip-host fix, and the build-only kconfig patch   |
 | `windows/`                | Windows client setup and the attach task               |
 | `rootfs/common`, `rootfs/debug` | files copied into the initramfs                  |

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Answers mDNS queries for <hostname>.local (tools/mdnsd.c, server=usbip), so
+# PCs find the Pi on any network; init restarts it if it exits. VirtualHere
+# does its own Bonjour on the same port.
+
+[ "$(cat /run/server 2>/dev/null)" = usbip ] || exec sleep 2147483647
+
+. /etc/functions
+
+# Restarted by init after exiting: pause so a crash loop doesn't spin.
+[ -e /run/mdnsd.started ] && sleep 1
+: > /run/mdnsd.started
+
+iface=$(netif)
+while [ -z "$iface" ]; do
+	sleep 1
+	iface=$(netif)
+done
+exec /usr/sbin/mdnsd "$iface" 2> /dev/kmsg
