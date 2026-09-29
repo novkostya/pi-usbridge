@@ -26,11 +26,14 @@ function Reachable {
 }
 
 Say "started: $Server port $Port, bus ID $BusId"
+$last = ''
 while ($true) {
 	$attached = (& $usbip port 2>$null) -match [regex]::Escape("usbip://${Server}:$Port/")
 	if (-not $attached -and (Reachable)) {
+		# "Device not found" while nothing is plugged into the Pi: log changes only.
 		$out = (& $usbip attach -r $Server -b $BusId --once 2>&1) -join ' '
-		Say "attach: $out"
+		if ($out -ne $last) { Say "attach: $out" }
+		$last = $out
 	}
 	Start-Sleep -Seconds 2
 }
