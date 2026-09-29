@@ -14,12 +14,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      # The busybox dialect needs shellcheck >= 0.10; the runner has 0.9.
+      - name: Install shellcheck 0.10.0
+        run: |
+          curl -fsSL -o sc.tar.xz https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz
+          echo "6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87  sc.tar.xz" | sha256sum -c
+          tar -xJf sc.tar.xz
+          sudo install shellcheck-v0.10.0/shellcheck /usr/local/bin/shellcheck
       - name: shellcheck
         run: |
           shellcheck -s sh build.sh scripts/deploy.sh scripts/qemu-test.sh versions.sh
           shellcheck -s bash scripts/boottime.sh scripts/loadtest.sh
           shellcheck -s busybox rootfs/common/etc/rc rootfs/common/etc/functions \
-            rootfs/common/etc/init.d/* rootfs/common/usr/share/udhcpc/default.script \
+            rootfs/common/etc/init.d/* rootfs/common/usr/share/*/default.script \
             rootfs/debug/etc/rc.debug rootfs/debug/etc/init.d/* rootfs/debug/etc/variant.env
 
   build:
