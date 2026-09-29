@@ -1,5 +1,6 @@
 #!/bin/sh
 # Build an SD card image. Usage: ./build.sh [prod|debug]...  (default: both)
+# ./build.sh loadtest builds the kit for scripts/loadtest.sh instead.
 #
 # Nothing is compiled except BusyBox (and Dropbear for debug): the kernel and
 # firmware are the official prebuilt ones from raspberrypi/firmware.
@@ -210,9 +211,32 @@ image() {
 	echo "    $img"
 }
 
+# Kit for scripts/loadtest.sh: load generators and the modules they need.
+loadtest() {
+	kit=$OUT/loadtest
+	msg "load-test kit"
+	rm -rf "$kit" && mkdir -p "$kit/mods"
+	for t in dsload hapload urbstorm; do
+		"$(cross)gcc" -static -O2 -s -Wall -o "$kit/$t" "$TOP/tools/loadtest/$t.c" -lm -lpthread
+	done
+	grep -v '^#' "$TOP/tools/loadtest/modules" | tr ' ' '\n' | grep . > "$kit/modules"
+	while read -r m; do
+		ko=$(awk -v m="/$m.ko.xz" 'index($2, m) { print $2 }' "$TOP/config/firmware.sha256")
+		[ -n "$ko" ] || die "module $m is not listed in config/firmware.sha256"
+		firmware "$ko"
+		xz -dc "$FW/$ko" > "$kit/mods/$m.ko"
+	done < "$kit/modules"
+}
+
+if [ "${1:-}" = loadtest ]; then
+	toolchain
+	loadtest
+	exit 0
+fi
+
 variants=${*:-prod debug}
 for v in $variants; do
-	case $v in prod|debug) ;; *) die "unknown variant '$v' (prod or debug)" ;; esac
+	case $v in prod|debug) ;; *) die "unknown variant '$v' (prod, debug or loadtest)" ;; esac
 done
 
 toolchain

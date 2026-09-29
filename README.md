@@ -17,7 +17,8 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
 - **Built for low latency.** CPU pinned at full speed, USB autosuspend off.
 - **Stable under load.** Uses the mainline `dwc2` USB driver: with the Pi's
   default `dwc_otg`, a game driving the DualSense's triggers and haptics
-  stalled the whole USB bus, Ethernet included.
+  stalled the whole USB bus, Ethernet included. `dwc2` also polls the
+  controller at its native 250 Hz, where `dwc_otg` managed 200 Hz.
 - **Two variants from the same source.** `prod` has only what's needed. `debug`
   adds SSH, a serial console, logs and troubleshooting tools.
 - **Heals itself, updates safely.** Hardware watchdog, reboot on network
@@ -210,6 +211,7 @@ firmware (bootcode.bin, start_cd.elf)
 | `boot/`                   | files copied onto the SD card                          |
 | `scripts/deploy.sh`       | update a running Pi, with automatic rollback           |
 | `scripts/boottime.sh`     | reboot a Pi and show where the boot time goes          |
+| `scripts/loadtest.sh`     | drive USB and network like a game, PASS/FAIL           |
 | `scripts/qemu-test.sh`    | boot an image in QEMU (`QEMU_TRIAL=1`: as a trial boot) |
 
 ### Why not Buildroot?
@@ -260,6 +262,30 @@ ssh -p 2222 root@localhost        # from another terminal
 `QEMU_TRIAL=1 scripts/qemu-test.sh debug` boots it as if it were the trial
 boot of an update, to test `/etc/init.d/trial` (stage a version in
 `/boot/next` of the image first).
+
+### Load test
+
+Before trusting a new kernel or firmware, drive the USB and network the way a
+game does, with a DualSense plugged into a Pi running the debug image:
+
+```sh
+./build.sh loadtest && scripts/loadtest.sh root@vhusb 15
+```
+
+It sends output reports (rumble, triggers, lightbar) at 250 Hz and streams
+4-channel audio, the stream the speaker and haptics run on, while pushing
+TCP traffic into the Pi and pinging it, then prints PASS or FAIL with the
+numbers. It stays silent: motors and trigger effects off, audio muted, but
+the same USB traffic as a game. `storm` as a third argument drives the
+controller over raw usbfs instead, cancelling pending transfers like vhusbd
+does. The Pi is rebooted when the test ends or is interrupted.
+
+On the Zero 2 W + PoE HAT, 15 minutes with `dwc2`: controller at its native
+250 reports/s, audio at 48000 frames/s with no underruns, 7.2 MB/s in,
+ping 1.4 ms average (3 ms worst). With `dwc_otg` the same load also ran
+clean, but the controller only got 200 reports/s. This test hasn't
+reproduced the game-triggered `dwc_otg` stall, so it can't prove a kernel
+fixes that; it does catch regressions in everyday traffic.
 
 ### Updating versions
 

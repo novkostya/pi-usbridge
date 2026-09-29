@@ -1,0 +1,3 @@
+# Kernel modules for the load test, in load order (from modules.dep).
+led-class-multicolor ff-memless hid-playstation
+snd snd-hwdep snd-seq-device snd-rawmidi snd-usbmidi-lib snd-ump mc snd-timer snd-pcm snd-usb-audio
