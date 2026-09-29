@@ -13,6 +13,6 @@
 # stable address from the Pi's serial number, or give one: 02:12:34:56:78:9a
 #mac=
 
-# Reboot if the gateway stops answering for this many seconds while the
-# Ethernet cable is connected (self-heal). 0 turns it off.
+# Reboot if the gateway (mostly) stops answering for about this many seconds
+# while the Ethernet cable is connected (self-heal). 0 turns it off.
 #netwatch=60

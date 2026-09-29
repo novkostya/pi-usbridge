@@ -1,27 +1,32 @@
 #!/bin/sh
-# Self-heal: reboot if the gateway stops answering, or answers slower than
-# 200 ms, for a while as long as the Ethernet link is up. With Raspberry Pi's
-# dwc_otg USB driver we saw the USB bus stall until a power cycle, leaving
-# the network barely alive (300-500 ms, some loss); this covers anything
-# like that. Does nothing until a gateway is known or while the cable is
-# unplugged. Timeout in seconds comes from `netwatch=` in vhusb.txt (0 = off).
+# Self-heal: reboot if the gateway mostly stops answering, or answers slower
+# than 200 ms, while the Ethernet link is up. With Raspberry Pi's dwc_otg USB
+# driver we saw the USB bus stall until a power cycle, with the network
+# barely alive (300-500 ms, some loss, the odd fast reply); this covers
+# anything like that. Checks every 5 s; reboots when 3/4 of the checks in
+# the window (`netwatch=` seconds in vhusb.txt, 0 = off) failed. Does
+# nothing until a gateway is known or while the cable is unplugged.
 
 . /etc/functions
 timeout=$(cat /run/netwatch 2>/dev/null)
 [ "${timeout:-0}" -gt 0 ] 2>/dev/null || exec sleep 2147483647
 
-now() { read -r up _ < /proc/uptime; echo "${up%.*}"; }
+checks=$((timeout / 5))
+[ "$checks" -ge 4 ] || checks=4
+history=''  # one character per check, newest last: 1 = ok, 0 = failed
 
-last_ok=$(now)
 while sleep 5; do
-	if [ ! -s /run/gateway ] || [ "$(cat "/sys/class/net/$(netif)/carrier" 2>/dev/null)" != 1 ] ||
-		gateway_answers; then
-		last_ok=$(now)
+	if [ ! -s /run/gateway ] || [ "$(cat "/sys/class/net/$(netif)/carrier" 2>/dev/null)" != 1 ]; then
+		history=''
 		continue
 	fi
-	down=$(( $(now) - last_ok ))
-	[ "$down" -ge "$timeout" ] || continue
-	mark "netwatch: gateway $(cat /run/gateway) unreachable or slow for ${down}s, rebooting"
+	gateway_answers && history="${history}1" || history="${history}0"
+	[ ${#history} -gt "$checks" ] && history=${history#?}
+	[ ${#history} -eq "$checks" ] || continue
+	ok=${history//0/}
+	failed=$((checks - ${#ok}))
+	[ $((failed * 4)) -ge $((checks * 3)) ] || continue
+	mark "netwatch: gateway $(cat /run/gateway) unreachable or slow in $failed of the last $checks checks, rebooting"
 	sync
 	reboot -f  # not via init: a stuck shutdown would disarm the hardware watchdog
 done

@@ -63,7 +63,7 @@ ip=dhcp                    # or a static address: 192.168.1.50/24
 gateway=192.168.1.1        # static only
 dns=192.168.1.1            # static only
 mac=                       # empty: adapter's own; "serial": stable MAC derived from the Pi's serial; or 02:12:34:56:78:9a
-netwatch=60                # reboot if the gateway is unreachable/slow this long (seconds, 0 = off)
+netwatch=60                # reboot if the gateway is (mostly) unreachable/slow this long (seconds, 0 = off)
 ```
 
 For a reliable address, prefer DHCP with a static lease on your router over a
@@ -85,12 +85,15 @@ tested on the hardware:
 
 | Failure                                         | Recovery                         | Serving again |
 | ----------------------------------------------- | -------------------------------- | ------------- |
-| Network dead or very slow (gateway ARP >200 ms) | reboot after 60 s (`netwatch`)   | ~66 s         |
+| Network dead or very slow (gateway ARP >200 ms) | reboot after ~1 min (`netwatch`) | ~70 s         |
 | System hangs                                    | hardware watchdog, 15 s          | ~25 s         |
 | Kernel panic                                    | reboot after 5 s (`panic=5`)     | ~14 s         |
 
-`netwatch` only acts while the cable is connected and a gateway is known,
-so a Pi plugged straight into a laptop without a router is left alone.
+`netwatch` checks the gateway every 5 s and reboots when 3 out of 4 checks
+in the last minute failed, so a stall where the odd reply still gets through
+counts too, and a few slow replies on a healthy network don't. It only acts
+while the cable is connected and a gateway is known, so a Pi plugged straight
+into a laptop without a router is left alone.
 
 ## Status LED
 
