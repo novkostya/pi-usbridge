@@ -33,7 +33,7 @@ else
 fi
 
 # /boot/usbridge.txt: key=value lines, see the template on the SD card.
-hostname=usbridge ip=dhcp gateway='' dns='' mac='' netwatch=60 server=${SERVER_DEFAULT:-usbip} allow='' devices=''
+hostname=usbridge ip=dhcp gateway='' dns='' mac='' netwatch=60 server=${SERVER_DEFAULT:-usbip} allow='' devices='' rtprio=0
 if [ -f /boot/usbridge.txt ]; then
 	cr=$(printf '\r')
 	while IFS='=' read -r key val || [ -n "$key" ]; do
@@ -42,7 +42,7 @@ if [ -f /boot/usbridge.txt ]; then
 		# shellcheck disable=SC2086 # split to trim whitespace
 		set -- $val
 		case "$key" in
-			hostname|ip|gateway|dns|mac|netwatch|server) [ -n "$1" ] && eval "$key=\$1" ;;
+			hostname|ip|gateway|dns|mac|netwatch|server|rtprio) [ -n "$1" ] && eval "$key=\$1" ;;
 			allow|devices) eval "$key=\$*" ;;
 		esac
 	done < /boot/usbridge.txt
@@ -53,6 +53,7 @@ echo "$netwatch" > /run/netwatch
 echo "$server" > /run/server
 echo "$allow" > /run/allow
 echo "$devices" > /run/devices
+echo "$rtprio" > /run/rtprio
 
 # A trial boot of a new version (see /etc/init.d/trial) tries its vhusbd too.
 vhusbd=/boot/vhusbdarm64

@@ -19,5 +19,7 @@ done
 for d in $(cat /run/devices 2>/dev/null); do
 	set -- "$@" -d "$d"
 done
+rtprio=$(cat /run/rtprio 2>/dev/null)
+[ "${rtprio:-0}" -gt 0 ] 2>/dev/null && set -- "$@" -r "$rtprio"
 mark "starting usbipd"
 exec /usr/sbin/usbipd "$@" 2> /dev/kmsg

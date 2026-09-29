@@ -3,7 +3,7 @@
  * USB traffic; this only answers the two requests a client makes before that
  * (list devices, import one) and hands the connection to the kernel.
  *
- *   usbipd [-p PORT] [-a ADDR[/LEN]]... [-d VID:PID]...
+ *   usbipd [-p PORT] [-a ADDR[/LEN]]... [-d VID:PID]... [-r RTPRIO]
  *
  * All USB devices are exported, or only those matching -d; never hubs or
  * network adapters, so the Pi can't be cut off its network. With -a, only
@@ -19,6 +19,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <poll.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -265,6 +266,35 @@ static int bind_host(const char *busid)
 	return write_file(SYS_HOST "/bind", busid);
 }
 
+/* usbip-host's threads carry every transfer; at normal priority, busy moments
+ * on the Pi delay them past the 10-20 ms Windows' audio driver keeps queued,
+ * and it resets the stream. Give them real-time priority (-r). */
+static int rt_prio;
+
+static void boost_threads(void)
+{
+	DIR *d = opendir("/proc");
+	for (struct dirent *e; d && (e = readdir(d));) {
+		char path[300], comm[32] = "";
+		if (e->d_name[0] < '1' || e->d_name[0] > '9')
+			continue;
+		snprintf(path, sizeof(path), "/proc/%s/comm", e->d_name);
+		FILE *f = fopen(path, "r");
+		if (!f)
+			continue;
+		if (!fgets(comm, sizeof(comm), f))
+			comm[0] = 0;
+		fclose(f);
+		if (strncmp(comm, "stub_rx", 7) && strncmp(comm, "stub_tx", 7))
+			continue;
+		struct sched_param sp = { .sched_priority = rt_prio };
+		if (sched_setscheduler(atoi(e->d_name), SCHED_FIFO, &sp) < 0)
+			say("can't raise %s's priority: %s", e->d_name, strerror(errno));
+	}
+	if (d)
+		closedir(d);
+}
+
 static void import(int fd, const char *peer)
 {
 	char busid[BUSID_SIZE + 1] = "", asked[BUSID_SIZE + 1], path[PATH_MAX], buf[16];
@@ -315,8 +345,11 @@ static void import(int fd, const char *peer)
 	snprintf(buf, sizeof(buf), "%d", fd);
 	if (write_file(path, buf) < 0)
 		say("%s: handing %s over failed: %s", peer, busid, strerror(errno));
-	else
+	else {
 		say("%s attached %s", peer, busid);
+		if (rt_prio)
+			boost_threads();
+	}
 }
 
 static int allowed(const struct in6_addr *a)
@@ -366,9 +399,11 @@ static int parse_allow(const char *s)
 int main(int argc, char **argv)
 {
 	int port = 3240, opt;
-	while ((opt = getopt(argc, argv, "p:a:d:")) != -1) {
+	while ((opt = getopt(argc, argv, "p:a:d:r:")) != -1) {
 		if (opt == 'p') {
 			port = atoi(optarg);
+		} else if (opt == 'r') {
+			rt_prio = atoi(optarg);
 		} else if (opt == 'a' && nallow < 16) {
 			if (parse_allow(optarg) < 0) {
 				fprintf(stderr, "bad address: %s\n", optarg);
@@ -383,7 +418,7 @@ int main(int argc, char **argv)
 			devs[ndevs].vid = vid;
 			devs[ndevs++].pid = pid;
 		} else {
-			fprintf(stderr, "usage: %s [-p PORT] [-a ADDR[/LEN]]... [-d VID:PID]...\n", argv[0]);
+			fprintf(stderr, "usage: %s [-p PORT] [-a ADDR[/LEN]]... [-d VID:PID]... [-r RTPRIO]\n", argv[0]);
 			return 1;
 		}
 	}

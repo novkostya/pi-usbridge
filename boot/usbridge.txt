@@ -31,6 +31,11 @@
 # network adapters are never shared, so the Pi can't lose its own network.
 #devices=
 
+# usbip only, experimental: run the kernel threads that carry USB/IP traffic
+# at this real-time priority (1-99), so a busy Pi doesn't delay them; audio
+# (e.g. DualSense haptics) glitches when they fall behind. 0: normal priority.
+#rtprio=0
+
 # Reboot if the gateway (mostly) stops answering for about this many seconds
 # while the Ethernet cable is connected (self-heal). 0 turns it off.
 #netwatch=60
