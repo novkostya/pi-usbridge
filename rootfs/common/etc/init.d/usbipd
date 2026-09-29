@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runs usbipd (server=usbip, tools/usbipd.c) in the foreground; init restarts
+# it if it exits. It logs to the kernel log (dmesg).
+
+[ "$(cat /run/server 2>/dev/null)" = usbip ] || exec sleep 2147483647
+
+. /etc/functions
+
+# Restarted by init after exiting: pause so a crash loop doesn't spin.
+[ -e /run/usbipd.started ] && sleep 1
+: > /run/usbipd.started
+
+set --
+# shellcheck disable=SC2013 # words, not lines
+for a in $(cat /run/allow 2>/dev/null); do
+	set -- "$@" -a "$a"
+done
+# shellcheck disable=SC2013
+for d in $(cat /run/devices 2>/dev/null); do
+	set -- "$@" -d "$d"
+done
+mark "starting usbipd"
+exec /usr/sbin/usbipd "$@" 2> /dev/kmsg

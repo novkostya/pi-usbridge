@@ -2,8 +2,9 @@
 # Build an SD card image. Usage: ./build.sh [prod|debug]...  (default: both)
 # ./build.sh loadtest builds the kit for scripts/loadtest.sh instead.
 #
-# Nothing is compiled except BusyBox (and Dropbear for debug): the kernel and
-# firmware are the official prebuilt ones from raspberrypi/firmware.
+# The kernel and firmware are the official prebuilt ones from
+# raspberrypi/firmware. Compiled here: BusyBox, our small tools, Dropbear
+# (debug), and one kernel module, usbip-host, to carry a fix (patches/linux/).
 #
 # Environment:
 #   VHUSBD=0       don't download vhusbd into the image (see README "Licensing")
@@ -29,7 +30,7 @@ export SOURCE_DATE_EPOCH
 msg() { printf '\033[1m>>> %s\033[0m\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-for t in curl tar bzip2 xz gzip cpio make gcc mkfs.vfat mcopy sfdisk; do
+for t in curl tar bzip2 xz gzip cpio make gcc patch flex bison bc perl mkfs.vfat mcopy sfdisk; do
 	command -v $t >/dev/null || die "missing host tool: $t (see README)"
 done
 
@@ -113,6 +114,58 @@ vhusbd() {
 	mv "$DL/vhusbdarm64.part" "$DL/vhusbdarm64"
 }
 
+# fingerprint KO: what the kernel checks before loading a module: its vermagic
+# and the CRC of every symbol it uses (one line each).
+fingerprint() {
+	"$(cross)objcopy" -O binary --only-section=.modinfo "$1" "$1.modinfo"
+	"$(cross)objcopy" -O binary --only-section=__versions "$1" "$1.versions"
+	tr '\0' '\n' < "$1.modinfo" | grep '^vermagic='
+	od -An -v -tx1 -w64 "$1.versions" | LC_ALL=C sort
+	rm -f "$1.modinfo" "$1.versions"
+}
+
+# usbip_host: the one kernel module we build, usbip-host with patches/linux/,
+# against the prebuilt kernel: its source, its config (from configs.ko) and its
+# symbol versions. Fails unless the result has the stock module's vermagic and
+# symbol CRCs, i.e. the running kernel will accept it.
+usbip_host() {
+	ko=$BUILD/usbip-host.ko
+	stamp="$KERNEL_COMMIT $(cat "$TOP"/patches/linux/*.patch | sha256sum)"
+	[ -f "$ko" ] && [ "$(cat "$ko.stamp" 2>/dev/null)" = "$stamp" ] && return
+	msg "usbip-host module (patched)"
+	mods=modules/$KERNEL_VERSION/kernel
+	for f in extra/git_hash extra/Module8.symvers $mods/kernel/configs.ko.xz \
+		$mods/drivers/usb/usbip/usbip-host.ko.xz; do
+		firmware "$f"
+	done
+	[ "$(cat "$FW/extra/git_hash")" = "$KERNEL_COMMIT" ] ||
+		die "KERNEL_COMMIT doesn't match the firmware's extra/git_hash"
+	fetch "$KERNEL_SRC_URL" "$KERNEL_SRC_SHA256" "$DL/linux-$KERNEL_COMMIT.tar.gz"
+	src=$BUILD/linux-$KERNEL_COMMIT
+	rm -rf "$src" && mkdir -p "$src"
+	tar -xzf "$DL/linux-$KERNEL_COMMIT.tar.gz" -C "$src" --strip-components=1
+	for p in "$TOP"/patches/linux/*.patch; do patch -s -p1 -d "$src" < "$p"; done
+	xz -dc "$FW/$mods/kernel/configs.ko.xz" > "$BUILD/configs.ko"
+	"$src/scripts/extract-ikconfig" "$BUILD/configs.ko" > "$src/.config"
+	"$src/scripts/config" --file "$src/.config" --disable GCC_PLUGINS
+	cp "$FW/extra/Module8.symvers" "$src/Module.symvers"
+	# LOCALVERSION=+: the "+" the Pi's kernel got from being built past a tag.
+	kmake() { make -C "$src" -s ARCH=arm64 CROSS_COMPILE="$(cross)" LOCALVERSION=+ "$@"; }
+	kmake olddefconfig
+	kmake -j"$JOBS" modules_prepare
+	release=$(cat "$src/include/config/kernel.release")
+	[ "$release" = "$KERNEL_VERSION" ] || die "kernel release $release, expected $KERNEL_VERSION"
+	kmake -j"$JOBS" M=drivers/usb/usbip modules
+	"$(cross)strip" --strip-debug -o "$ko" "$src/drivers/usb/usbip/usbip-host.ko"
+
+	stock=$BUILD/usbip-host.stock.ko
+	xz -dc "$FW/$mods/drivers/usb/usbip/usbip-host.ko.xz" > "$stock"
+	ours=$(fingerprint "$ko") theirs=$(fingerprint "$stock")
+	case $ours in *vermagic=*) ;; *) die "usbip-host.ko: no vermagic" ;; esac
+	[ "$ours" = "$theirs" ] || die "usbip-host.ko: vermagic or symbol CRCs differ from the stock module"
+	echo "$stamp" > "$ko.stamp"
+}
+
 # cpio_node NAME MODE MAJOR MINOR: a newc archive with one device node, so
 # /dev/console exists before devtmpfs is mounted, without needing root.
 cpio_node() {
@@ -145,9 +198,11 @@ initramfs() {
 		"$(cross)gcc" -static -Os -s -o "$root/usr/sbin/reboot-arg" "$TOP/tools/reboot-arg.c"
 		for p in dropbear dropbearkey scp; do ln -s dropbearmulti "$root/usr/sbin/$p"; done
 	fi
+	"$(cross)gcc" -static -Os -s -Wall -o "$root/usr/sbin/usbipd" "$TOP/tools/usbipd.c"
 	# r8152: the HAT's Ethernet. raspberrypi-hwmon: logs "Undervoltage detected!".
+	# usbip-core, and usbip-host built with our fix (usbip_host above): USB/IP.
 	# usbmon (debug): USB traffic capture, /sys/kernel/debug/usb/usbmon.
-	modules="r8152 raspberrypi-hwmon"
+	modules="r8152 raspberrypi-hwmon usbip-core"
 	[ "$variant" = debug ] && modules="$modules usbmon"
 	for m in $modules $EXTRA_MODULES; do
 		ko=$(awk -v m="/$m.ko.xz" 'index($2, m) { print $2 }' "$TOP/config/firmware.sha256")
@@ -155,6 +210,7 @@ initramfs() {
 		firmware "$ko"
 		xz -dc "$FW/$ko" > "$root/lib/modules/$m.ko"
 	done
+	cp "$BUILD/usbip-host.ko" "$root/lib/modules/usbip-host.ko"
 
 	# Deterministic archive: fixed timestamps and ownership.
 	find "$root" -exec touch -h -d @0 {} +
@@ -240,6 +296,7 @@ for v in $variants; do
 done
 
 toolchain
+usbip_host
 [ "$VHUSBD" = 1 ] && vhusbd
 for v in $variants; do
 	busybox "$v"

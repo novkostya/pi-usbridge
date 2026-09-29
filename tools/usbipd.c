@@ -6,9 +6,12 @@
  *   usbipd [-p PORT] [-a ADDR[/LEN]]... [-d VID:PID]...
  *
  * Only devices matching -d are listed or exported (default: DualSense and
- * DualSense Edge), so the Pi's own network adapter can never be taken. With -a,
- * only those clients may connect; without it, anyone who can reach the port.
- * Clients that disappear are dropped within ~10 s, freeing the device.
+ * DualSense Edge), and never hubs or network adapters, so the Pi can't be cut
+ * off its network. With -a, only those clients may connect; without it,
+ * anyone who can reach the port. A client asking for a bus ID that isn't
+ * exported gets the one exported device when exactly one is plugged in, so
+ * moving it to another USB port is fine. Clients that disappear are dropped
+ * within ~10 s, freeing the device.
  */
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -92,7 +95,26 @@ static int write_file(const char *path, const char *s)
 	return fclose(f) == 0 && ok ? 0 : -1;
 }
 
-/* Is BUSID a device (not a root hub or an interface) we export? */
+/* Does BUSID carry a network interface (like the Pi's own Ethernet)? */
+static int has_netdev(const char *busid)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), SYS_DEVICES "/%s", busid);
+	DIR *d = opendir(path);
+	int found = 0;
+	for (struct dirent *e; d && !found && (e = readdir(d));) {
+		if (strncmp(e->d_name, busid, strlen(busid)) || e->d_name[strlen(busid)] != ':')
+			continue;
+		snprintf(path, sizeof(path), SYS_DEVICES "/%s/%s/net", busid, e->d_name);
+		found = access(path, F_OK) == 0;
+	}
+	if (d)
+		closedir(d);
+	return found;
+}
+
+/* Is BUSID a device (not a root hub or an interface) we export? Never a hub
+ * or a network adapter, whatever -d says: that would cut the Pi off. */
 static int exported(const char *busid)
 {
 	if (strchr(busid, ':') || !strncmp(busid, "usb", 3) || strlen(busid) >= BUSID_SIZE)
@@ -100,7 +122,7 @@ static int exported(const char *busid)
 	unsigned vid = attr(busid, "idVendor", 16), pid = attr(busid, "idProduct", 16);
 	for (int i = 0; i < ndevs; i++)
 		if (devs[i].vid == vid && devs[i].pid == pid)
-			return 1;
+			return attr(busid, "bDeviceClass", 16) != 0x09 && !has_netdev(busid);
 	return 0;
 }
 
@@ -195,9 +217,9 @@ static int reply(int fd, unsigned code, unsigned status)
 	return send_all(fd, hdr, sizeof(hdr));
 }
 
-static void devlist(int fd)
+/* The exported devices that are plugged in: their bus IDs, and how many. */
+static int scan(char names[16][BUSID_SIZE])
 {
-	char names[16][BUSID_SIZE];
 	int n = 0;
 	DIR *d = opendir(SYS_DEVICES);
 	for (struct dirent *e; d && (e = readdir(d)) && n < 16;)
@@ -205,6 +227,13 @@ static void devlist(int fd)
 			strcpy(names[n++], e->d_name); /* exported() checked its length */
 	if (d)
 		closedir(d);
+	return n;
+}
+
+static void devlist(int fd)
+{
+	char names[16][BUSID_SIZE];
+	int n = scan(names);
 	uint8_t buf[4 + 16 * (DEVICE_SIZE + 32 * 4)], *p = put32(buf, n);
 	for (int i = 0; i < n; i++)
 		p += describe(names[i], p, 1);
@@ -239,9 +268,16 @@ static void import(int fd, const char *peer)
 		return;
 	busid[BUSID_SIZE] = 0;
 	if (!exported(busid)) {
-		say("%s asked for %s: not exported", peer, busid);
-		reply(fd, OP_REP_IMPORT, ST_NODEV);
-		return;
+		/* Clients remember the bus ID, which changes with the USB port.
+		 * With one exported device plugged in, serve it whatever they ask. */
+		char names[16][BUSID_SIZE];
+		if (scan(names) != 1) {
+			say("%s asked for %s: not exported", peer, busid);
+			reply(fd, OP_REP_IMPORT, ST_NODEV);
+			return;
+		}
+		say("%s asked for %s, serving %s", peer, busid, names[0]);
+		strcpy(busid, names[0]);
 	}
 	if (bind_host(busid) < 0) {
 		say("%s: can't bind %s to usbip-host: %s", peer, busid, strerror(errno));

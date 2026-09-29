@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-shot boot script, run by init before anything else (see /etc/inittab).
 # Everything lives in RAM; the SD card's boot partition is only mounted
-# read-only to read settings and the vhusbd binary.
+# read-only to read settings (and the vhusbd binary, for VirtualHere).
 
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -18,7 +18,7 @@ for g in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor; do
 	[ -w "$g" ] && echo performance > "$g"
 done
 
-# Kernel modules: Ethernet driver, under-voltage warnings.
+# Kernel modules: Ethernet driver, under-voltage warnings, USB/IP.
 for m in /lib/modules/*.ko; do
 	[ -e "$m" ] && insmod "$m"
 done
@@ -33,7 +33,7 @@ else
 fi
 
 # /boot/vhusb.txt: key=value lines, see the template on the SD card.
-hostname=vhusb ip=dhcp gateway='' dns='' mac='' netwatch=60
+hostname=vhusb ip=dhcp gateway='' dns='' mac='' netwatch=60 server=usbip allow='' devices=''
 if [ -f /boot/vhusb.txt ]; then
 	cr=$(printf '\r')
 	while IFS='=' read -r key val || [ -n "$key" ]; do
@@ -42,13 +42,17 @@ if [ -f /boot/vhusb.txt ]; then
 		# shellcheck disable=SC2086 # split to trim whitespace
 		set -- $val
 		case "$key" in
-			hostname|ip|gateway|dns|mac|netwatch) [ -n "$1" ] && eval "$key=\$1" ;;
+			hostname|ip|gateway|dns|mac|netwatch|server) [ -n "$1" ] && eval "$key=\$1" ;;
+			allow|devices) eval "$key=\$*" ;;
 		esac
 	done < /boot/vhusb.txt
 fi
 hostname "$hostname"
 echo "$hostname" > /etc/hostname
 echo "$netwatch" > /run/netwatch
+echo "$server" > /run/server
+echo "$allow" > /run/allow
+echo "$devices" > /run/devices
 
 # A trial boot of a new version (see /etc/init.d/trial) tries its vhusbd too.
 vhusbd=/boot/vhusbdarm64

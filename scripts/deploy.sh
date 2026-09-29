@@ -8,8 +8,8 @@
 #    everything is checksummed.
 # 2. The Pi reboots into it once, using the firmware's one-shot tryboot flag
 #    (tryboot.txt = the new config.txt + os_prefix=next/).
-# 3. The new system makes itself permanent once it's healthy: vhusbd running,
-#    network up (see /etc/init.d/trial). If it isn't within 90s, or it
+# 3. The new system makes itself permanent once it's healthy: its USB server
+#    running, network up (see /etc/init.d/trial). If it isn't within 90s, or it
 #    crashes or hangs, the next boot is the current version again.
 #
 #   ./build.sh debug && scripts/deploy.sh root@vhusb [debug|prod]
@@ -102,7 +102,7 @@ while [ $i -lt 240 ]; do
 			exit 1 ;;
 	esac
 done
-if [ "$variant" = prod ] && port_open 7575; then
+if [ "$variant" = prod ] && { port_open 3240 || port_open 7575; }; then
 	echo "done: prod is running (no SSH to confirm; it didn't fall back)"
 	exit 0
 fi

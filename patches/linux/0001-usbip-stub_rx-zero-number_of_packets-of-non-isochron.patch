@@ -1,0 +1,51 @@
+Subject: [PATCH] usbip: stub_rx: zero number_of_packets of non-isochronous URBs
+
+The USB/IP protocol sets number_of_packets in CMD_SUBMIT to 0xffffffff
+for non-isochronous transfers (Documentation/usb/usbip_protocol.rst),
+and usbip-win2, the Windows client, does so. Linux's vhci-hcd sends 0,
+which is why Linux clients don't hit this. stub_recv_cmd_submit() copies
+the field into the URB through usbip_pack_pdu() whatever the pipe type,
+so the URB reaches the host controller driver with number_of_packets
+set to -1.
+
+Most host controller drivers ignore the field for non-isochronous URBs,
+but dwc2 sizes its per-URB state by it in _dwc2_hcd_urb_enqueue():
+
+	dwc2_urb = dwc2_hcd_urb_alloc(hsotg, urb->number_of_packets, mem_flags);
+
+struct_size() saturates, the allocation warns and fails, and every
+transfer fails with -ENOMEM:
+
+	WARNING: CPU: 0 PID: 6951 at mm/page_alloc.c:5291 __alloc_frozen_pages_noprof+0x6d8/0xe78
+	...
+	 _dwc2_hcd_urb_enqueue+0xc8/0x620
+	 usb_hcd_submit_urb+0xc0/0x8f0
+	 usb_submit_urb+0x1bc/0x5d8
+	 stub_rx_loop+0x9b8/0xb90 [usbip_host]
+	usbip-host 1-1.3: submit_urb error, -12
+
+so with such clients no device can be exported from a dwc2 host, e.g.
+a Raspberry Pi Zero 2 W. Zero number_of_packets for non-isochronous
+pipes, the value usb_alloc_urb(0, ...) left there.
+
+Tested on a Raspberry Pi Zero 2 W (dwc2, 6.18.50) exporting a DualSense
+to usbip-win2 0.9.8.1: control, interrupt and isochronous transfers work.
+
+---
+--- a/drivers/usb/usbip/stub_rx.c
++++ b/drivers/usb/usbip/stub_rx.c
+@@ -591,6 +591,14 @@
+ 		priv->urbs[i]->complete = stub_complete;
+ 
+ 		/*
++		 * The protocol sets number_of_packets to 0xffffffff for
++		 * non-isochronous transfers. Host controller drivers that size
++		 * their per-URB state by it (dwc2) would fail with -ENOMEM.
++		 */
++		if (!usb_pipeisoc(pipe))
++			priv->urbs[i]->number_of_packets = 0;
++
++		/*
+ 		 * all URBs belong to a single PDU, so a global is_tweaked flag is
+ 		 * enough
+ 		 */

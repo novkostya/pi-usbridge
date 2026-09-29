@@ -1,6 +1,8 @@
 #!/bin/sh
-# Runs vhusbd in the foreground; init restarts it if it exits.
+# Runs vhusbd (server=virtualhere) in the foreground; init restarts it if
+# it exits.
 
+[ "$(cat /run/server 2>/dev/null)" = virtualhere ] || exec sleep 2147483647
 if [ ! -x /usr/sbin/vhusbd ]; then
 	echo "vhusbd: /boot/vhusbdarm64 missing, copy it to the SD card" > /dev/console
 	exec sleep 2147483647

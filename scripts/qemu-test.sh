@@ -1,11 +1,16 @@
 #!/bin/sh
 # Boot an image in QEMU's raspi3b machine (same SoC family as the Zero 2 W),
-# with an emulated USB NIC standing in for the HAT's RTL8152.
-# The initramfs must include cdc_ether:
+# with an emulated USB NIC standing in for the HAT's RTL8152, and a USB
+# keyboard (0627:0001) to export over USB/IP. The initramfs must include
+# cdc_ether:
 #
 #   EXTRA_MODULES=cdc_ether ./build.sh debug && scripts/qemu-test.sh debug
 #
-# SSH: ssh -p 2222 root@localhost    vhusbd: localhost:7575    Quit: Ctrl-a x
+# The copy QEMU boots exports the keyboard (devices=0627:0001 in vhusb.txt),
+# so scripts/usbip-probe.py localhost can test USB/IP end to end.
+#
+# SSH: ssh -p 2222 root@localhost    USB/IP: localhost:3240
+# vhusbd (server=virtualhere): localhost:7575    Quit: Ctrl-a x
 
 set -eu
 TOP=$(cd "$(dirname "$0")/.." && pwd)
@@ -20,7 +25,8 @@ sum=$(awk -v p="$dtb" '$2 == p { print $1 }' "$TOP/config/firmware.sha256")
 echo "$sum  $fw/$dtb" | sha256sum -c --quiet -
 
 # QEMU's USB controller model crashes the Pi's downstream dwc_otg driver, so
-# switch the test DTB to the mainline dwc2 driver (real hardware keeps dwc_otg).
+# switch the test DTB to the mainline dwc2 driver (as config.txt does on the
+# real hardware with dtoverlay=dwc2).
 test_dtb=$TOP/build/qemu.dtb
 cp "$fw/$dtb" "$test_dtb"
 fdtput -t s "$test_dtb" /soc/usb@7e980000 compatible brcm,bcm2835-usb
@@ -40,6 +46,9 @@ fdtput -t s "$test_dtb" / serial-number 00000000c0ffee42
 # ttyAMA1.
 img=$TOP/build/qemu-$variant.img
 cp "$TOP/out/vhusb-zero-$variant.img" "$img"
+settings=$TOP/build/qemu-vhusb.txt
+{ cat "$boot/vhusb.txt"; echo "devices=0627:0001"; } > "$settings"
+mcopy -o -i "$img@@1M" "$settings" ::/vhusb.txt
 cmdline=$(sed 's/serial0/ttyAMA1/' "$boot/cmdline.txt")
 case $cmdline in *console=*) ;; *) cmdline="$cmdline console=ttyAMA1,115200" ;; esac
 
@@ -47,5 +56,5 @@ exec qemu-system-aarch64 -M raspi3b -nographic \
 	-kernel "$boot/kernel8.img" -dtb "$test_dtb" -initrd "$boot/initramfs.cpio.gz" \
 	-append "$cmdline earlycon=pl011,0x3f201000" \
 	-drive file="$img",if=sd,format=raw \
-	-usb -device usb-net,netdev=n0 \
-	-netdev user,id=n0,hostfwd=tcp::2222-:22,hostfwd=tcp::7575-:7575
+	-usb -device usb-net,netdev=n0 -device usb-kbd \
+	-netdev user,id=n0,hostfwd=tcp::2222-:22,hostfwd=tcp::7575-:7575,hostfwd=tcp::3240-:3240

@@ -6,6 +6,11 @@
 # Raspberry Pi firmware + prebuilt kernel (https://github.com/raspberrypi/firmware)
 FIRMWARE_TAG=1.20260915
 KERNEL_VERSION=6.18.50-v8+
+# Its source (extra/git_hash in the firmware tag), for the one module we
+# build ourselves: usbip-host with patches/linux/.
+KERNEL_COMMIT=cff533aec2fa601846766b32ff57204e0a61bed7
+KERNEL_SRC_URL=https://github.com/raspberrypi/linux/archive/$KERNEL_COMMIT.tar.gz
+KERNEL_SRC_SHA256=6c58de91ade97d7cd9176e408f05c9d134cda64dba95a87b7af976bf26c0c0bd
 
 # Prebuilt musl cross toolchain (https://toolchains.bootlin.com)
 TOOLCHAIN=aarch64--musl--stable-2026.08-1

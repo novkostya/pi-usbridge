@@ -15,6 +15,21 @@
 # stable address from the Pi's serial number, or give one: 02:12:34:56:78:9a
 #mac=
 
+# The USB server: "usbip" (default) serves the controller over USB/IP, the
+# open protocol Linux has built in (Windows client: usbip-win2). "virtualhere"
+# runs VirtualHere's server instead; it needs vhusbdarm64 on this card.
+#server=usbip
+
+# usbip only: which clients may connect, as addresses or networks separated
+# by spaces, e.g. "192.168.1.20 192.168.1.0/24". Empty lets anyone who can
+# reach the Pi connect.
+#allow=
+
+# usbip only: which USB devices to export, as vendor:product IDs separated by
+# spaces. Default: DualSense and DualSense Edge. Hubs and network adapters
+# are never exported, so the Pi can't lose its own network.
+#devices=054c:0ce6 054c:0df2
+
 # Reboot if the gateway (mostly) stops answering for about this many seconds
 # while the Ethernet cable is connected (self-heal). 0 turns it off.
 #netwatch=60

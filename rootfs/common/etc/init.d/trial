@@ -9,12 +9,15 @@
 . /etc/functions
 trial || exit 0
 
-# vhusbd listening on TCP port 7575 (hex 1D97; state 0A = LISTEN)
+# The USB server listening: usbipd on TCP port 3240 (hex 0CA8), vhusbd on
+# 7575 (1D97). State 0A = LISTEN.
+port=0CA8
+[ "$(cat /run/server 2>/dev/null)" = virtualhere ] && port=1D97
 listening() {
 	for f in /proc/net/tcp /proc/net/tcp6; do
 		[ -r "$f" ] || continue
 		while read -r _ addr _ state _; do
-			case $addr in *:1D97) [ "$state" = 0A ] && return 0 ;; esac
+			case $addr in *:$port) [ "$state" = 0A ] && return 0 ;; esac
 		done < "$f"
 	done
 	return 1
@@ -28,7 +31,7 @@ healthy() {
 
 failure_log() {
 	{
-		echo "vhusbd listening: $(listening && echo yes || echo no)"
+		echo "server ($(cat /run/server)) listening: $(listening && echo yes || echo no)"
 		echo "address: $(ip -4 -o addr show dev "$(netif)" 2>/dev/null)"
 		echo "gateway: $(cat /run/gateway 2>/dev/null), answers: $(gateway_answers && echo yes || echo no)"
 		dmesg 2>/dev/null  # debug image only

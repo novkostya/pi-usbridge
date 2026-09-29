@@ -1,5 +1,6 @@
 # BusyBox init. Format: <tty>::<action>:<command>
 ::sysinit:/etc/rc
+::respawn:/etc/init.d/usbipd
 ::respawn:/etc/init.d/vhusbd
 ::respawn:/etc/init.d/persist-config
 ::respawn:/etc/init.d/watchdog
