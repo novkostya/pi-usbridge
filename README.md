@@ -9,8 +9,8 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
 
 - **Runs from RAM.** The whole system is a ~250 KB initramfs. The SD card is only
   read at boot, so pulling the power is safe and the card doesn't wear out.
-- **Boots fast.** Stock Raspberry Pi kernel, trimmed firmware and no services
-  beyond what's needed.
+- **Boots fast.** About 9 seconds from power-on to serving (see
+  [Boot time](#boot-time)).
 - **Just works on any network.** Gets its address over DHCP and sends its
   hostname, so your router's DNS knows it as `vhusb`. Static IP is one line
   in a text file.
@@ -20,8 +20,11 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
   stalled the whole USB bus, Ethernet included.
 - **Two variants from the same source.** `prod` has only what's needed. `debug`
   adds SSH, a serial console, logs and troubleshooting tools.
-- **Easy to read.** One shell script builds everything in a couple of minutes.
-  Nothing is compiled except BusyBox (and Dropbear for debug).
+- **Heals itself, updates safely.** Hardware watchdog, reboot on network
+  loss, and remote updates that roll back if the new version doesn't come up.
+- **Easy to read.** One shell script builds everything in about a minute.
+  The kernel and firmware are prebuilt; only BusyBox (plus Dropbear and two
+  small tools for debug) is compiled.
 
 ## Hardware
 
@@ -76,7 +79,7 @@ VirtualHere's own settings live in `config.ini` (see the
 one hides the HAT's Ethernet adapter (`IgnoredDevices=bda/8152`) so a client
 can't take the Pi's network away. When the server changes `config.ini` (license,
 device nicknames, ...), the image copies it back to the SD card within a few
-seconds. That's the only time the card is written to.
+seconds. Apart from updates, that's the only time the card is written to.
 
 ## Self-healing
 
@@ -113,7 +116,9 @@ The debug image boots the same way and adds:
 - **Serial console** with a root shell on GPIO14 (TX) / GPIO15 (RX), 115200 8N1.
   Kernel messages are shown there too.
 - **Logs**: `logread` (`-f` to follow) for vhusbd, DHCP and kernel messages, plus `dmesg`.
-- **Tools**: `ps`, `top`, `ping`, `nslookup`, `wget`, `netstat`, `lsusb`, `vi`, `less`, ...
+- **Tools**: `ps`, `top`, `ping`, `nslookup`, `wget`, `netstat`, `nc`, `lsusb`,
+  `vi`, `less`, ... and `get_throttled` (the firmware's under-voltage and
+  throttling flags, like `vcgencmd get_throttled`).
 
 Some useful commands:
 
@@ -187,7 +192,7 @@ and Ethernet link negotiation.
 firmware (bootcode.bin, start_cd.elf)
   └─ kernel8.img + initramfs.cpio.gz (stock Raspberry Pi kernel, busybox userland)
        └─ /init = busybox init, reads /etc/inittab
-            ├─ /etc/rc (once): mount, load r8152, read /boot/vhusb.txt, start DHCP
+            ├─ /etc/rc (once): mount, load drivers, read /boot/vhusb.txt, start DHCP
             ├─ /etc/init.d/vhusbd          (restarted if it exits)
             ├─ /etc/init.d/persist-config  (saves config.ini changes to the SD card)
             ├─ /etc/init.d/watchdog        (hardware watchdog, reboots on hang)
@@ -251,6 +256,10 @@ EXTRA_MODULES=cdc_ether ./build.sh debug
 scripts/qemu-test.sh debug        # Ctrl-a x to quit
 ssh -p 2222 root@localhost        # from another terminal
 ```
+
+`QEMU_TRIAL=1 scripts/qemu-test.sh debug` boots it as if it were the trial
+boot of an update, to test `/etc/init.d/trial` (stage a version in
+`/boot/next` of the image first).
 
 ### Updating versions
 
