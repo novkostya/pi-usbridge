@@ -226,6 +226,11 @@ No root needed: it works in an unprivileged container. Downloads are cached in
 `dl/` and checked against the checksums in `versions.sh` and
 `config/firmware.sha256`.
 
+Builds are reproducible: building the same commit gives byte-identical
+images, so anyone can check a release image against the source. Images that
+include vhusbd are the exception: VirtualHere publishes it at an unversioned
+URL.
+
 Environment variables:
 
 - `VHUSBD=0`: don't put the VirtualHere binary on the image.

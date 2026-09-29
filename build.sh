@@ -21,6 +21,10 @@ VHUSBD=${VHUSBD:-1}
 EXTRA_MODULES=${EXTRA_MODULES:-}
 FW=$DL/firmware-$FIRMWARE_TAG
 
+# Reproducible builds: the same commit gives byte-identical images.
+SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git -C "$TOP" log -1 --format=%ct 2>/dev/null || echo 0)}
+export SOURCE_DATE_EPOCH
+
 msg() { printf '\033[1m>>> %s\033[0m\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
@@ -62,6 +66,7 @@ busybox() {
 	frag=$BUILD/busybox-$1.fragment
 	cat "$TOP/config/busybox-prod.config" > "$frag"
 	[ "$1" = debug ] && cat "$TOP/config/busybox-debug.config" >> "$frag"
+	echo "# SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH (build date in the banner)" >> "$frag"
 	if [ -x "$src/busybox" ] && cmp -s "$frag" "$src/.fragment"; then return; fi
 
 	msg "busybox $BUSYBOX_VERSION ($1)"
@@ -189,10 +194,17 @@ image() {
 	# scripts/deploy.sh to upload a second copy of the 29 MiB kernel.
 	size_mb=128
 	rm -f "$img" "$img.vfat"
-	mkfs.vfat -C -n VHUSB "$img.vfat" $(( (size_mb - 1) * 1024 )) >/dev/null
-	mcopy -s -i "$img.vfat" "$boot"/* ::/
+	mkfs.vfat --invariant -C -n VHUSB "$img.vfat" $(( (size_mb - 1) * 1024 )) >/dev/null
+	# One by one in a fixed order and with fixed times: reproducible layout.
+	find "$boot" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
+	(cd "$boot" && find . -mindepth 1 -type d | LC_ALL=C sort) | while read -r d; do
+		mmd -i "$img.vfat" "::/${d#./}"
+	done
+	(cd "$boot" && find . -type f | LC_ALL=C sort) | while read -r f; do
+		mcopy -m -i "$img.vfat" "$boot/${f#./}" "::/${f#./}"
+	done
 	truncate -s ${size_mb}M "$img"
-	echo 'start=2048, type=c, bootable' | sfdisk -q "$img"
+	printf 'label: dos\nlabel-id: 0x56485553\nstart=2048, type=c, bootable\n' | sfdisk -q "$img"
 	dd if="$img.vfat" of="$img" bs=1M seek=1 conv=notrunc status=none
 	rm "$img.vfat"
 	echo "    $img"
