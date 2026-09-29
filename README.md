@@ -16,6 +16,8 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
   PC without a router, it takes a link-local 169.254.x.x address like the PC
   does. Static IP is one line in a text file.
 - **Built for low latency.** CPU pinned at full speed, USB autosuspend off.
+  That costs about 4 °C at idle (56 °C vs 52 °C with on-demand scaling, in
+  the PoE HAT).
 - **Stable under load.** Uses the mainline `dwc2` USB driver: with the Pi's
   default `dwc_otg`, a game driving the DualSense's triggers and haptics
   stalled the whole USB bus, Ethernet included. `dwc2` also polls the
