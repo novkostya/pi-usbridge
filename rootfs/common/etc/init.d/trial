@@ -1,0 +1,61 @@
+#!/bin/sh
+# scripts/deploy.sh uploads a new version to /boot/next and reboots into it
+# once, using the firmware's one-shot tryboot flag (tryboot.txt sets
+# os_prefix=next/). If this trial boot comes up healthy, make it permanent;
+# otherwise reboot, which brings back the previous version. So does any
+# crash, hang (hardware watchdog) or power loss before that.
+# Only uses applets that the prod image has.
+
+. /etc/functions
+trial || exit 0
+
+# vhusbd listening on TCP port 7575 (hex 1D97; state 0A = LISTEN)
+listening() {
+	for f in /proc/net/tcp /proc/net/tcp6; do
+		[ -r "$f" ] || continue
+		while read -r _ addr _ state _; do
+			case $addr in *:1D97) [ "$state" = 0A ] && return 0 ;; esac
+		done < "$f"
+	done
+	return 1
+}
+
+healthy() {
+	listening || return 1
+	case "$(ip -4 -o addr show dev "$(netif)" 2>/dev/null)" in *inet*) ;; *) return 1 ;; esac
+	[ ! -s /run/gateway ] || gateway_answers  # a gateway, if there is one, must answer
+}
+
+i=0
+until healthy; do
+	i=$((i + 1))
+	if [ $i -ge 90 ]; then
+		mark "trial: not healthy after 90s, rebooting into the previous version"
+		if mount -o remount,rw /boot; then
+			{
+				echo "vhusbd listening: $(listening && echo yes || echo no)"
+				echo "address: $(ip -4 -o addr show dev "$(netif)" 2>/dev/null)"
+				echo "gateway: $(cat /run/gateway 2>/dev/null), answers: $(gateway_answers && echo yes || echo no)"
+				dmesg 2>/dev/null  # debug image only
+			} > /boot/next/trial-failed.log
+			sync
+		fi
+		reboot -f
+	fi
+	sleep 1
+done
+
+mark "trial: healthy, making this version permanent"
+mount -o remount,rw /boot || exit 1
+mkdir -p /boot/overlays
+for f in /boot/next/overlays/*; do
+	[ -f "$f" ] && mv "$f" "/boot/overlays/${f##*/}"
+done
+for f in /boot/next/*; do
+	[ -f "$f" ] && [ "${f##*/}" != config.txt ] && mv "$f" "/boot/${f##*/}"
+done
+mv /boot/next/config.txt /boot/config.txt
+rm -rf /boot/tryboot.txt /boot/next
+sync
+mount -o remount,ro /boot
+mark "trial: done"

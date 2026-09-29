@@ -4,4 +4,5 @@
 ::respawn:/etc/init.d/persist-config
 ::respawn:/etc/init.d/watchdog
 ::respawn:/etc/init.d/netwatch
+::once:/etc/init.d/trial
 ::shutdown:/bin/umount -a -r

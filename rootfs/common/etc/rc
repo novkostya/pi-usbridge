@@ -50,8 +50,11 @@ hostname "$hostname"
 echo "$hostname" > /etc/hostname
 echo "$netwatch" > /run/netwatch
 
-if [ -f /boot/vhusbdarm64 ]; then
-	cp /boot/vhusbdarm64 /usr/sbin/vhusbd && chmod 755 /usr/sbin/vhusbd
+# A trial boot of a new version (see /etc/init.d/trial) tries its vhusbd too.
+vhusbd=/boot/vhusbdarm64
+trial && [ -f /boot/next/vhusbdarm64 ] && vhusbd=/boot/next/vhusbdarm64
+if [ -f "$vhusbd" ]; then
+	cp "$vhusbd" /usr/sbin/vhusbd && chmod 755 /usr/sbin/vhusbd
 fi
 [ -f /boot/config.ini ] && cp /boot/config.ini /etc/vhusbd/config.ini
 

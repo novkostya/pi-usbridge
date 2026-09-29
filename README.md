@@ -124,14 +124,29 @@ dmesg | grep -i usb                 # USB enumeration problems
 ## Updating a running Pi
 
 With the debug image, you can update the Pi over SSH instead of reflashing
-the card. Your settings on the card are kept:
+the card:
 
 ```sh
 ./build.sh debug && scripts/deploy.sh root@vhusb
 ```
 
-`scripts/deploy.sh root@vhusb prod` switches to the prod image the same way.
-Prod has no SSH, so after that, updates need the SD card again.
+A broken update can't brick it:
+
+1. The new version is uploaded to `/boot/next`, next to the current one.
+   Only changed files cross the network, and everything is checksummed.
+2. The Pi reboots into it once, using the firmware's one-shot `tryboot`
+   flag (`tryboot.txt` is the new `config.txt` plus `os_prefix=next/`).
+3. The new system checks itself: vhusbd listening, an IP address, gateway
+   answering. If it's healthy, it moves `/boot/next` into place and becomes
+   permanent. If it isn't within 90 s, it reboots. If it crashes or hangs, the
+   hardware watchdog or `panic=5` reboots it. Any reboot, or a power cut,
+   brings back the previous version, and `deploy.sh` shows why the trial
+   failed.
+
+Your settings on the card (`vhusb.txt`, `config.ini`, `authorized_keys`, SSH
+host key) are kept. `scripts/deploy.sh root@vhusb prod` switches to the prod
+image the same way. Prod has no SSH, so after that, updates need the SD card
+again.
 
 ## Boot time
 
@@ -173,7 +188,8 @@ firmware (bootcode.bin, start_cd.elf)
             ├─ /etc/init.d/vhusbd          (restarted if it exits)
             ├─ /etc/init.d/persist-config  (saves config.ini changes to the SD card)
             ├─ /etc/init.d/watchdog        (hardware watchdog, reboots on hang)
-            └─ /etc/init.d/netwatch        (reboots if the gateway stops answering)
+            ├─ /etc/init.d/netwatch        (reboots if the gateway stops answering)
+            └─ /etc/init.d/trial           (after an update: keep it if healthy, else roll back)
 ```
 
 | Path                      | What                                                   |
@@ -184,7 +200,9 @@ firmware (bootcode.bin, start_cd.elf)
 | `config/busybox-*.config` | exactly which BusyBox applets each variant gets        |
 | `rootfs/common`, `rootfs/debug` | files copied into the initramfs                  |
 | `boot/`                   | files copied onto the SD card                          |
-| `scripts/qemu-test.sh`    | boot an image in QEMU                                  |
+| `scripts/deploy.sh`       | update a running Pi, with automatic rollback           |
+| `scripts/boottime.sh`     | reboot a Pi and show where the boot time goes          |
+| `scripts/qemu-test.sh`    | boot an image in QEMU (`QEMU_TRIAL=1`: as a trial boot) |
 
 ### Why not Buildroot?
 

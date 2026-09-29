@@ -1,2 +1,4 @@
 # /etc/functions etc. only exist on the device.
 disable=SC1091
+# Commands in single quotes run on the Pi over ssh.
+disable=SC2016

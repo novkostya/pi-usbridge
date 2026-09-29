@@ -20,5 +20,22 @@ netif() {
 	done
 }
 
+# The gateway answered ARP within 200 ms ("Unicast reply from ... 0.672ms");
+# the first reply counts, there can be duplicates. Sets $gw from /run/gateway.
+gateway_answers() {
+	gw=$(cat /run/gateway 2>/dev/null)
+	[ -n "$gw" ] || return 1
+	ms=
+	for w in $(arping -c 1 -w 2 -I "$(netif)" "$gw" 2>/dev/null); do
+		case $w in *ms) ms=${w%ms}; ms=${ms%.*}; break ;; esac
+	done
+	[ -n "$ms" ] && [ "$ms" -lt 200 ]
+}
+
+# Running a trial boot of a new version from /boot/next (scripts/deploy.sh).
+trial() {
+	[ "$(cat /proc/device-tree/chosen/os_prefix 2>/dev/null)" = next/ ]
+}
+
 # Variant-specific settings (the debug image sets extra options here).
 [ -f /etc/variant.env ] && . /etc/variant.env

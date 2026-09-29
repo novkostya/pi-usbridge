@@ -31,6 +31,9 @@ fdtput -t s "$test_dtb" /soc/watchdog@7e100000 status disabled
 fdtput -t s "$test_dtb" /soc/serial@7e201000/bluetooth status disabled
 # The firmware normally fills in the board serial number; vhusbd needs it.
 fdtput -t s "$test_dtb" / serial-number 00000000c0ffee42
+# QEMU_TRIAL=1: pretend this is a trial boot of /boot/next (see
+# /etc/init.d/trial); the firmware would set this from tryboot.txt.
+[ "${QEMU_TRIAL:-}" = 1 ] && fdtput -t s "$test_dtb" /chosen os_prefix next/
 
 # QEMU wants a copy of the SD image it can write to. There's no firmware to
 # expand serial0; with Bluetooth enabled in the Pi 3 DTB the PL011 UART is

@@ -12,27 +12,16 @@ timeout=$(cat /run/netwatch 2>/dev/null)
 
 now() { read -r up _ < /proc/uptime; echo "${up%.*}"; }
 
-# Gateway answered ARP within 200 ms ("Unicast reply from ... 0.672ms");
-# the first reply counts, there can be duplicates.
-answers() {
-	ms=
-	for w in $(arping -c 1 -w 2 -I "$iface" "$gw" 2>/dev/null); do
-		case $w in *ms) ms=${w%ms}; ms=${ms%.*}; break ;; esac
-	done
-	[ -n "$ms" ] && [ "$ms" -lt 200 ]
-}
-
 last_ok=$(now)
 while sleep 5; do
-	gw=$(cat /run/gateway 2>/dev/null)
-	iface=$(netif)
-	if [ -z "$gw" ] || [ "$(cat "/sys/class/net/$iface/carrier" 2>/dev/null)" != 1 ] || answers; then
+	if [ ! -s /run/gateway ] || [ "$(cat "/sys/class/net/$(netif)/carrier" 2>/dev/null)" != 1 ] ||
+		gateway_answers; then
 		last_ok=$(now)
 		continue
 	fi
 	down=$(( $(now) - last_ok ))
 	[ "$down" -ge "$timeout" ] || continue
-	mark "netwatch: gateway $gw unreachable or slow for ${down}s, rebooting"
+	mark "netwatch: gateway $(cat /run/gateway) unreachable or slow for ${down}s, rebooting"
 	sync
 	reboot -f  # not via init: a stuck shutdown would disarm the hardware watchdog
 done

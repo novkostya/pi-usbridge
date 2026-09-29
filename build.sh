@@ -136,6 +136,7 @@ initramfs() {
 		cp -a "$TOP/rootfs/debug/." "$root/"
 		cp "$BUILD/dropbear-$DROPBEAR_VERSION/dropbearmulti" "$root/usr/sbin/"
 		"$(cross)gcc" -static -Os -s -o "$root/usr/bin/get_throttled" "$TOP/tools/get_throttled.c"
+		"$(cross)gcc" -static -Os -s -o "$root/usr/sbin/reboot-arg" "$TOP/tools/reboot-arg.c"
 		for p in dropbear dropbearkey scp; do ln -s dropbearmulti "$root/usr/sbin/$p"; done
 	fi
 	# r8152: the HAT's Ethernet. raspberrypi-hwmon: logs "Undervoltage detected!".
