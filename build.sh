@@ -165,7 +165,7 @@ image() {
 
 	for f in bootcode.bin start_cd.elf fixup_cd.dat kernel8.img \
 		bcm2710-rpi-zero-2-w.dtb overlays/overlay_map.dtb \
-		overlays/disable-bt.dtbo overlays/disable-wifi.dtbo \
+		overlays/disable-bt.dtbo overlays/disable-wifi.dtbo overlays/dwc2.dtbo \
 		LICENCE.broadcom COPYING.linux; do
 		firmware "boot/$f"
 		mkdir -p "$(dirname "$boot/$f")"
