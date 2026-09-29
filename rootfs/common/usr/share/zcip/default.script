@@ -1,0 +1,20 @@
+#!/bin/sh
+# Called by zcip, which gives the Pi an IPv4 link-local address (169.254.x.x)
+# when DHCP gets no answer, e.g. when it's plugged straight into a PC. PCs do
+# the same, so they find each other (VirtualHere via Bonjour).
+# Environment: $interface $ip
+
+# shellcheck disable=SC2154 # variables are set by zcip
+. /etc/functions
+
+case "$1" in
+	config)
+		ip addr add "$ip/16" brd + dev "$interface" scope link
+		led default-on
+		mark "link-local address $ip"
+		;;
+	deconfig)
+		[ -n "$ip" ] && ip addr del "$ip/16" dev "$interface" 2>/dev/null
+		;;
+esac
+exit 0

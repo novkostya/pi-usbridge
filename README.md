@@ -12,8 +12,9 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
 - **Boots fast.** About 9 seconds from power-on to serving (see
   [Boot time](#boot-time)).
 - **Just works on any network.** Gets its address over DHCP and sends its
-  hostname, so your router's DNS knows it as `vhusb`. Static IP is one line
-  in a text file.
+  hostname, so your router's DNS knows it as `vhusb`. Plugged straight into a
+  PC without a router, it takes a link-local 169.254.x.x address like the PC
+  does. Static IP is one line in a text file.
 - **Built for low latency.** CPU pinned at full speed, USB autosuspend off.
 - **Stable under load.** Uses the mainline `dwc2` USB driver: with the Pi's
   default `dwc_otg`, a game driving the DualSense's triggers and haptics
@@ -63,7 +64,7 @@ with `EXTRA_MODULES`, see [Building](#building)).
 
 ```ini
 hostname=vhusb             # sent to the DHCP server; shown in the VirtualHere client
-ip=dhcp                    # or a static address: 192.168.1.50/24
+ip=dhcp                    # or a static address: 192.168.1.50/24 (/24 if left out)
 gateway=192.168.1.1        # static only
 dns=192.168.1.1            # static only
 mac=                       # empty: adapter's own; "serial": stable MAC derived from the Pi's serial; or 02:12:34:56:78:9a

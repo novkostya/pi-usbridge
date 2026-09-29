@@ -5,6 +5,22 @@
 # shellcheck disable=SC2154 # variables are set by udhcpc
 . /etc/functions
 
+# No DHCP server (e.g. plugged straight into a PC): also take a link-local
+# address. Stopped again once a lease arrives.
+zcip_start() {
+	[ -f /run/zcip.pid ] && kill -0 "$(cat /run/zcip.pid)" 2>/dev/null && return
+	zcip -f "$interface" /usr/share/zcip/default.script </dev/null >/dev/null 2>&1 &
+	echo $! > /run/zcip.pid
+}
+zcip_stop() {
+	[ -f /run/zcip.pid ] || return
+	kill "$(cat /run/zcip.pid)" 2>/dev/null
+	rm -f /run/zcip.pid
+	for w in $(ip -4 -o addr show dev "$interface"); do
+		case $w in 169.254.*/*) ip addr del "$w" dev "$interface" ;; esac
+	done
+}
+
 event=$1
 case "$event" in
 	deconfig)
@@ -23,8 +39,13 @@ case "$event" in
 		for d in $dns; do echo "nameserver $d" >> /etc/resolv.conf; done
 		led default-on
 		mark "dhcp $event $ip"
+		zcip_stop
 		;;
-	leasefail|nak)
+	leasefail)
+		[ -f /run/zcip.pid ] || led timer
+		zcip_start
+		;;
+	nak)
 		led timer
 		;;
 esac

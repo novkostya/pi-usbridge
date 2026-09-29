@@ -3,7 +3,9 @@
 # Name sent to the DHCP server (so e.g. dnsmasq resolves "vhusb.lan").
 #hostname=vhusb
 
-# "dhcp" (default) or a static address in CIDR form, e.g. 192.168.1.50/24.
+# "dhcp" (default) or a static address, e.g. 192.168.1.50/24 (/24 if left
+# out). With dhcp and no DHCP server, e.g. plugged straight into a PC, the
+# Pi also takes a link-local 169.254.x.x address, like the PC does.
 #ip=dhcp
 # Only used with a static ip:
 #gateway=192.168.1.1
