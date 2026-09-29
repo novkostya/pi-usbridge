@@ -2,6 +2,7 @@
 # Called by udhcpc on lease events. Environment: $interface $ip $mask
 # $router $dns (see busybox udhcpc docs).
 
+# shellcheck disable=SC2154 # variables are set by udhcpc
 . /etc/functions
 
 event=$1
@@ -15,6 +16,7 @@ case "$event" in
 		[ "$old" != "$ip/$mask" ] && ip -4 addr flush dev "$interface"
 		ip addr replace "$ip/$mask" dev "$interface"
 		echo "$ip/$mask" > /run/udhcpc.ip
+		# shellcheck disable=SC2086 # first of the routers
 		set -- $router
 		[ -n "$1" ] && ip route replace default via "$1" dev "$interface" && echo "$1" > /run/gateway
 		: > /etc/resolv.conf

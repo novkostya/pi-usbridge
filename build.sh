@@ -207,7 +207,7 @@ toolchain
 for v in $variants; do
 	busybox "$v"
 	[ "$v" = debug ] && dropbear
-	rm -rf "$OUT/$v" && mkdir -p "$OUT/$v/boot"
+	rm -rf "${OUT:?}/$v" && mkdir -p "$OUT/$v/boot"
 	initramfs "$v"
 	image "$v"
 done

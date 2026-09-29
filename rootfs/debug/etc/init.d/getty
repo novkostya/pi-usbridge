@@ -1,6 +1,7 @@
 #!/bin/sh
 # Root shell on the serial console: the tty of the last console= on the
 # kernel command line (ttyAMA0 on GPIO14/15 with the debug config.txt).
+# shellcheck disable=SC2046 # one word per console
 set -- $(cat /sys/class/tty/console/active)
 for tty; do :; done
 if [ -z "$tty" ] || [ ! -c "/dev/$tty" ]; then

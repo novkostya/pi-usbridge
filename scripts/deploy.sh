@@ -17,6 +17,7 @@ variant=${2:-debug}
 boot=$TOP/out/$variant/boot
 [ -f "$boot/initramfs.cpio.gz" ] || { echo "build it first: ./build.sh $variant" >&2; exit 1; }
 
+# shellcheck disable=SC2086 # SSH_OPTS holds several options
 ssh_() { ssh ${SSH_OPTS:-} -o BatchMode=yes -o ServerAliveInterval=5 -o ServerAliveCountMax=3 "$host" "$@"; }
 files=$(cd "$boot" && find . -type f | sed 's|^\./||' | grep -v -x -e vhusb.txt -e config.ini)
 

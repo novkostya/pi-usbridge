@@ -10,6 +10,18 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          shellcheck -s sh build.sh scripts/deploy.sh scripts/qemu-test.sh versions.sh
+          shellcheck -s bash scripts/boottime.sh
+          shellcheck -s busybox rootfs/common/etc/rc rootfs/common/etc/functions \
+            rootfs/common/etc/init.d/* rootfs/common/usr/share/udhcpc/default.script \
+            rootfs/debug/etc/rc.debug rootfs/debug/etc/init.d/* rootfs/debug/etc/variant.env
+
   build:
     runs-on: ubuntu-24.04
     steps:

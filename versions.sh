@@ -1,3 +1,4 @@
+# shellcheck disable=SC2034 # sourced by build.sh
 # Pinned inputs. Everything the build downloads is listed here (plus
 # config/firmware.sha256) and verified by checksum, except vhusbd, which
 # VirtualHere publishes at a fixed URL without versioning.

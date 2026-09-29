@@ -83,11 +83,11 @@ seconds. That's the only time the card is written to.
 An appliance nobody logs into should recover by itself. Each of these was
 tested on the hardware:
 
-| Failure                                            | Recovery                      | Serving again |
-| -------------------------------------------------- | ----------------------------- | ------------- |
-| Network dead or very slow (gateway ARP >200 ms)    | reboot after 60 s (`netwatch`) | ~66 s         |
-| System hangs                                       | hardware watchdog, 15 s       | ~25 s         |
-| Kernel panic                                       | reboot after 5 s (`panic=5`)  | ~14 s         |
+| Failure                                         | Recovery                         | Serving again |
+| ----------------------------------------------- | -------------------------------- | ------------- |
+| Network dead or very slow (gateway ARP >200 ms) | reboot after 60 s (`netwatch`)   | ~66 s         |
+| System hangs                                    | hardware watchdog, 15 s          | ~25 s         |
+| Kernel panic                                    | reboot after 5 s (`panic=5`)     | ~14 s         |
 
 `netwatch` only acts while the cable is connected and a gateway is known,
 so a Pi plugged straight into a laptop without a router is left alone.

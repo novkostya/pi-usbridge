@@ -16,11 +16,11 @@ ssh_() { ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" "$@" </dev/null; }
 now() { date +%s.%N; }
 port_open() { timeout 0.3 bash -c "echo > /dev/tcp/$addr/$1" 2>/dev/null; }
 
-for run in $(seq "$runs"); do
+for _ in $(seq "$runs"); do
 	# Retry the reboot if the Pi is still up after 15s.
 	while :; do
 		ssh_ reboot >/dev/null 2>&1 || true
-		for i in $(seq 300); do
+		for _ in $(seq 300); do
 			ping -c1 -W0.2 "$addr" >/dev/null 2>&1 || break 2
 			sleep 0.05
 		done
