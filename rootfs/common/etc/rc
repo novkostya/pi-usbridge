@@ -33,7 +33,7 @@ else
 fi
 
 # /boot/vhusb.txt: key=value lines, see the template on the SD card.
-hostname=vhusb ip=dhcp gateway= dns= mac=
+hostname=vhusb ip=dhcp gateway= dns= mac= netwatch=60
 if [ -f /boot/vhusb.txt ]; then
 	cr=$(printf '\r')
 	while IFS='=' read -r key val || [ -n "$key" ]; do
@@ -41,12 +41,13 @@ if [ -f /boot/vhusb.txt ]; then
 		val=${val%"$cr"}
 		set -- $val
 		case "$key" in
-			hostname|ip|gateway|dns|mac) [ -n "$1" ] && eval "$key=\$1" ;;
+			hostname|ip|gateway|dns|mac|netwatch) [ -n "$1" ] && eval "$key=\$1" ;;
 		esac
 	done < /boot/vhusb.txt
 fi
 hostname "$hostname"
 echo "$hostname" > /etc/hostname
+echo "$netwatch" > /run/netwatch
 
 if [ -f /boot/vhusbdarm64 ]; then
 	cp /boot/vhusbdarm64 /usr/sbin/vhusbd && chmod 755 /usr/sbin/vhusbd
@@ -97,7 +98,7 @@ if [ "$ip" = dhcp ]; then
 	) </dev/null >/dev/null 2>&1 &
 else
 	ip addr add "$ip" dev "$iface"
-	[ -n "$gateway" ] && ip route add default via "$gateway"
+	[ -n "$gateway" ] && ip route add default via "$gateway" && echo "$gateway" > /run/gateway
 	[ -n "$dns" ] && echo "nameserver $dns" > /etc/resolv.conf
 	led default-on
 fi

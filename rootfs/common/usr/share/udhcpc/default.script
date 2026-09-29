@@ -16,7 +16,7 @@ case "$event" in
 		ip addr replace "$ip/$mask" dev "$interface"
 		echo "$ip/$mask" > /run/udhcpc.ip
 		set -- $router
-		[ -n "$1" ] && ip route replace default via "$1" dev "$interface"
+		[ -n "$1" ] && ip route replace default via "$1" dev "$interface" && echo "$1" > /run/gateway
 		: > /etc/resolv.conf
 		for d in $dns; do echo "nameserver $d" >> /etc/resolv.conf; done
 		led default-on

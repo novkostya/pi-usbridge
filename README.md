@@ -63,6 +63,7 @@ ip=dhcp                    # or a static address: 192.168.1.50/24
 gateway=192.168.1.1        # static only
 dns=192.168.1.1            # static only
 mac=                       # empty: adapter's own; "serial": stable MAC derived from the Pi's serial; or 02:12:34:56:78:9a
+netwatch=60                # reboot if the gateway is unreachable/slow this long (seconds, 0 = off)
 ```
 
 For a reliable address, prefer DHCP with a static lease on your router over a
@@ -76,6 +77,20 @@ one hides the HAT's Ethernet adapter (`IgnoredDevices=bda/8152`) so a client
 can't take the Pi's network away. When the server changes `config.ini` (license,
 device nicknames, ...), the image copies it back to the SD card within a few
 seconds. That's the only time the card is written to.
+
+## Self-healing
+
+An appliance nobody logs into should recover by itself. Each of these was
+tested on the hardware:
+
+| Failure                                            | Recovery                      | Serving again |
+| -------------------------------------------------- | ----------------------------- | ------------- |
+| Network dead or very slow (gateway ARP >200 ms)    | reboot after 60 s (`netwatch`) | ~66 s         |
+| System hangs                                       | hardware watchdog, 15 s       | ~25 s         |
+| Kernel panic                                       | reboot after 5 s (`panic=5`)  | ~14 s         |
+
+`netwatch` only acts while the cable is connected and a gateway is known,
+so a Pi plugged straight into a laptop without a router is left alone.
 
 ## Status LED
 
@@ -157,7 +172,8 @@ firmware (bootcode.bin, start_cd.elf)
             ├─ /etc/rc (once): mount, load r8152, read /boot/vhusb.txt, start DHCP
             ├─ /etc/init.d/vhusbd          (restarted if it exits)
             ├─ /etc/init.d/persist-config  (saves config.ini changes to the SD card)
-            └─ /etc/init.d/watchdog        (hardware watchdog, reboots on hang)
+            ├─ /etc/init.d/watchdog        (hardware watchdog, reboots on hang)
+            └─ /etc/init.d/netwatch        (reboots if the gateway stops answering)
 ```
 
 | Path                      | What                                                   |

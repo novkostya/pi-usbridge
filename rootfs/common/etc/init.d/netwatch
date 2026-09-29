@@ -1,0 +1,38 @@
+#!/bin/sh
+# Self-heal: reboot if the gateway stops answering, or answers slower than
+# 200 ms, for a while as long as the Ethernet link is up. With Raspberry Pi's
+# dwc_otg USB driver we saw the USB bus stall until a power cycle, leaving
+# the network barely alive (300-500 ms, some loss); this covers anything
+# like that. Does nothing until a gateway is known or while the cable is
+# unplugged. Timeout in seconds comes from `netwatch=` in vhusb.txt (0 = off).
+
+. /etc/functions
+timeout=$(cat /run/netwatch 2>/dev/null)
+[ "${timeout:-0}" -gt 0 ] 2>/dev/null || exec sleep 2147483647
+
+now() { read -r up _ < /proc/uptime; echo "${up%.*}"; }
+
+# Gateway answered ARP within 200 ms ("Unicast reply from ... 0.672ms");
+# the first reply counts, there can be duplicates.
+answers() {
+	ms=
+	for w in $(arping -c 1 -w 2 -I "$iface" "$gw" 2>/dev/null); do
+		case $w in *ms) ms=${w%ms}; ms=${ms%.*}; break ;; esac
+	done
+	[ -n "$ms" ] && [ "$ms" -lt 200 ]
+}
+
+last_ok=$(now)
+while sleep 5; do
+	gw=$(cat /run/gateway 2>/dev/null)
+	iface=$(netif)
+	if [ -z "$gw" ] || [ "$(cat "/sys/class/net/$iface/carrier" 2>/dev/null)" != 1 ] || answers; then
+		last_ok=$(now)
+		continue
+	fi
+	down=$(( $(now) - last_ok ))
+	[ "$down" -ge "$timeout" ] || continue
+	mark "netwatch: gateway $gw unreachable or slow for ${down}s, rebooting"
+	sync
+	reboot -f  # not via init: a stuck shutdown would disarm the hardware watchdog
+done
