@@ -26,36 +26,40 @@ healthy() {
 	[ ! -s /run/gateway ] || gateway_answers  # a gateway, if there is one, must answer
 }
 
+failure_log() {
+	{
+		echo "vhusbd listening: $(listening && echo yes || echo no)"
+		echo "address: $(ip -4 -o addr show dev "$(netif)" 2>/dev/null)"
+		echo "gateway: $(cat /run/gateway 2>/dev/null), answers: $(gateway_answers && echo yes || echo no)"
+		dmesg 2>/dev/null  # debug image only
+	} > /boot/next/trial-failed.log
+}
+
+promote() {
+	mkdir -p /boot/overlays
+	for f in /boot/next/overlays/*; do
+		[ -f "$f" ] && mv "$f" "/boot/overlays/${f##*/}"
+	done
+	for f in /boot/next/*; do
+		[ -f "$f" ] && [ "${f##*/}" != config.txt ] && mv "$f" "/boot/${f##*/}"
+	done
+	mv /boot/next/config.txt /boot/config.txt && rm -rf /boot/tryboot.txt /boot/next
+}
+
 i=0
 until healthy; do
 	i=$((i + 1))
 	if [ $i -ge 90 ]; then
 		mark "trial: not healthy after 90s, rebooting into the previous version"
-		if mount -o remount,rw /boot; then
-			{
-				echo "vhusbd listening: $(listening && echo yes || echo no)"
-				echo "address: $(ip -4 -o addr show dev "$(netif)" 2>/dev/null)"
-				echo "gateway: $(cat /run/gateway 2>/dev/null), answers: $(gateway_answers && echo yes || echo no)"
-				dmesg 2>/dev/null  # debug image only
-			} > /boot/next/trial-failed.log
-			sync
-		fi
+		boot_rw failure_log
 		reboot -f
 	fi
 	sleep 1
 done
 
 mark "trial: healthy, making this version permanent"
-mount -o remount,rw /boot || exit 1
-mkdir -p /boot/overlays
-for f in /boot/next/overlays/*; do
-	[ -f "$f" ] && mv "$f" "/boot/overlays/${f##*/}"
-done
-for f in /boot/next/*; do
-	[ -f "$f" ] && [ "${f##*/}" != config.txt ] && mv "$f" "/boot/${f##*/}"
-done
-mv /boot/next/config.txt /boot/config.txt
-rm -rf /boot/tryboot.txt /boot/next
-sync
-mount -o remount,ro /boot
-mark "trial: done"
+if boot_rw promote; then
+	mark "trial: done"
+else
+	mark "trial: could not make it permanent"
+fi

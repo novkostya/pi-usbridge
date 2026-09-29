@@ -34,9 +34,15 @@ die() { echo "error: $*" >&2; exit 1; }
 files=$(cd "$boot" && find . -type f | sed 's|^\./||' | grep -v -x -e vhusb.txt -e config.ini | sort)
 manifest=$(cd "$boot" && for f in $files; do md5sum "$f"; done)
 
+# While /boot is writable, pause the Pi's only other writer during a deploy
+# (persist-config) so it can't make /boot read-only under us.
+pause='kill -STOP $(pidof persist-config) 2>/dev/null'
+resume='sync; mount -o remount,ro /boot; kill -CONT $(pidof persist-config) 2>/dev/null; true'
+
 echo "staging in /boot/next"
-ssh_ 'mount -o remount,rw /boot && rm -rf /boot/next /boot/tryboot.txt && mkdir -p /boot/next/overlays' </dev/null
-trap 'ssh_ "rm -rf /boot/next /boot/tryboot.txt; sync; mount -o remount,ro /boot" </dev/null || true' EXIT
+ssh_ "$pause; mount -o remount,rw /boot && rm -rf /boot/next /boot/tryboot.txt && mkdir -p /boot/next/overlays" </dev/null ||
+	die "couldn't make /boot writable"
+trap 'ssh_ "rm -rf /boot/next /boot/tryboot.txt; $resume" </dev/null || true' EXIT
 
 # Copy what the card already has, list what needs uploading.
 upload=$(echo "$manifest" | ssh_ 'while read -r sum f; do
@@ -62,7 +68,7 @@ done')
 [ "$staged" = "$manifest" ] || die "staged files don't match the build, nothing changed"
 
 { cat "$boot/config.txt"; printf '\n# Trial boot of /boot/next (scripts/deploy.sh)\nos_prefix=next/\n'; } |
-	ssh_ 'cat > /boot/tryboot.txt && sync && mount -o remount,ro /boot'
+	ssh_ "cat > /boot/tryboot.txt && $resume"
 trap - EXIT
 
 # Older images don't have reboot-arg; bring one along.
@@ -92,7 +98,7 @@ while [ $i -lt 240 ]; do
 			ssh_ 'cat /boot/next/trial-failed.log 2>/dev/null' </dev/null > "$TOP/out/trial-failed.log" || true
 			head -n 3 "$TOP/out/trial-failed.log"
 			echo "(full log with dmesg: out/trial-failed.log)"
-			ssh_ 'mount -o remount,rw /boot && rm -rf /boot/next /boot/tryboot.txt; sync; mount -o remount,ro /boot' </dev/null || true
+			ssh_ "$pause; mount -o remount,rw /boot && rm -rf /boot/next /boot/tryboot.txt; $resume" </dev/null || true
 			exit 1 ;;
 	esac
 done

@@ -18,9 +18,8 @@ if [ -f /boot/ssh_host_ed25519_key ]; then
 	cp /boot/ssh_host_ed25519_key "$key"
 else
 	dropbearkey -t ed25519 -f "$key" >/dev/null 2>&1
-	mount -o remount,rw /boot && cp "$key" /boot/ssh_host_ed25519_key
-	sync
-	mount -o remount,ro /boot
+	. /etc/functions
+	boot_rw cp "$key" /boot/ssh_host_ed25519_key
 fi
 if [ -f /boot/authorized_keys ]; then
 	cp /boot/authorized_keys /root/.ssh/authorized_keys
