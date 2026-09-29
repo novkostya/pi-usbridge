@@ -1,0 +1,22 @@
+# Raspberry Pi firmware settings. https://www.raspberrypi.com/documentation/computers/config_txt.html
+
+arm_64bit=1
+kernel=kernel8.img
+initramfs initramfs.cpio.gz followkernel
+
+# Cut-down GPU firmware: no camera/video codecs, smaller and faster to load.
+start_file=start_cd.elf
+fixup_file=fixup_cd.dat
+gpu_mem=16
+
+# Boot fast: no rainbow splash, no delay, full CPU speed while booting.
+disable_splash=1
+boot_delay=0
+initial_turbo=30
+
+# Wired only: turn off the Wi-Fi/Bluetooth chip.
+dtoverlay=disable-wifi
+dtoverlay=disable-bt
+
+# No serial console (the debug image turns it on).
+enable_uart=0

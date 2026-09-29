@@ -1,0 +1,19 @@
+# Shared shell helpers.
+
+# The green ACT LED shows state: blinking = no IP yet, solid = ready.
+led() {
+	for l in /sys/class/leds/ACT /sys/class/leds/led0; do
+		[ -w "$l/trigger" ] && echo "$1" > "$l/trigger" 2>/dev/null && return
+	done
+}
+
+# First network interface other than loopback (the HAT's NIC is eth0).
+netif() {
+	for n in /sys/class/net/*; do
+		n=${n##*/}
+		[ "$n" != lo ] && [ -e "/sys/class/net/$n" ] && echo "$n" && return
+	done
+}
+
+# Variant-specific settings (the debug image sets extra options here).
+[ -f /etc/variant.env ] && . /etc/variant.env

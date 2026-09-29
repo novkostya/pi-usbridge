@@ -1,0 +1,5 @@
+#!/bin/sh
+# Hardware watchdog: the board reboots if this stops petting it for 15s
+# (i.e. the system hangs).
+[ -e /dev/watchdog ] || exec sleep 2147483647
+exec watchdog -F -T 15 -t 5 /dev/watchdog

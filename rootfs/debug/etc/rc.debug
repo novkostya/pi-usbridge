@@ -1,0 +1,32 @@
+#!/bin/sh
+# Debug-only services, started by /etc/rc once the boot partition is mounted.
+
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+
+# System log in RAM: read with `logread` (-f to follow) and `dmesg`.
+syslogd -C512
+klogd
+
+# SSH. Host key is generated once and kept on the SD card so it stays the
+# same across reboots. Login with the keys in /boot/authorized_keys, or,
+# if that file doesn't exist, as root with no password.
+key=/etc/dropbear/dropbear_ed25519_host_key
+mkdir -p /etc/dropbear /root/.ssh
+if [ -f /boot/ssh_host_ed25519_key ]; then
+	cp /boot/ssh_host_ed25519_key "$key"
+else
+	dropbearkey -t ed25519 -f "$key" >/dev/null 2>&1
+	mount -o remount,rw /boot && cp "$key" /boot/ssh_host_ed25519_key
+	sync
+	mount -o remount,ro /boot
+fi
+if [ -f /boot/authorized_keys ]; then
+	cp /boot/authorized_keys /root/.ssh/authorized_keys
+	chmod 700 /root/.ssh
+	chmod 600 /root/.ssh/authorized_keys
+	dropbear -r "$key" -s
+else
+	echo "rc.debug: no /boot/authorized_keys, allowing root SSH login without password" > /dev/console
+	dropbear -r "$key" -B
+fi

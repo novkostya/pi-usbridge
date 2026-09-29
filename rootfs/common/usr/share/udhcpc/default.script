@@ -1,0 +1,27 @@
+#!/bin/sh
+# Called by udhcpc on lease events. Environment: $interface $ip $mask
+# $router $dns (see busybox udhcpc docs).
+
+. /etc/functions
+
+case "$1" in
+	deconfig)
+		ip -4 addr flush dev "$interface"
+		led timer
+		;;
+	bound|renew)
+		old=$(cat /run/udhcpc.ip 2>/dev/null)
+		[ "$old" != "$ip/$mask" ] && ip -4 addr flush dev "$interface"
+		ip addr replace "$ip/$mask" dev "$interface"
+		echo "$ip/$mask" > /run/udhcpc.ip
+		set -- $router
+		[ -n "$1" ] && ip route replace default via "$1" dev "$interface"
+		: > /etc/resolv.conf
+		for d in $dns; do echo "nameserver $d" >> /etc/resolv.conf; done
+		led default-on
+		;;
+	leasefail|nak)
+		led timer
+		;;
+esac
+exit 0

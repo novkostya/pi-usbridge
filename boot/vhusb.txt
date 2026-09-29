@@ -1,0 +1,14 @@
+# vhusb-zero settings. Uncomment and edit a line to change it.
+
+# Name sent to the DHCP server (so e.g. dnsmasq resolves "vhusb.lan").
+#hostname=vhusb
+
+# "dhcp" (default) or a static address in CIDR form, e.g. 192.168.1.50/24.
+#ip=dhcp
+# Only used with a static ip:
+#gateway=192.168.1.1
+#dns=192.168.1.1
+
+# Ethernet MAC address. Empty uses the adapter's own. "serial" derives a
+# stable address from the Pi's serial number, or give one: 02:12:34:56:78:9a
+#mac=
