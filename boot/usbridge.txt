@@ -1,7 +1,7 @@
-# vhusb-zero settings. Uncomment and edit a line to change it.
+# pi-usbridge settings. Uncomment and edit a line to change it.
 
-# Name sent to the DHCP server (so e.g. dnsmasq resolves "vhusb.lan").
-#hostname=vhusb
+# Name sent to the DHCP server (so e.g. dnsmasq resolves "usbridge.lan").
+#hostname=usbridge
 
 # "dhcp" (default) or a static address, e.g. 192.168.1.50/24 (/24 if left
 # out). With dhcp and no DHCP server, e.g. plugged straight into a PC, the

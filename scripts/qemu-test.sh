@@ -46,7 +46,7 @@ fdtput -t s "$test_dtb" / serial-number 00000000c0ffee42
 # expand serial0; with Bluetooth enabled in the Pi 3 DTB the PL011 UART is
 # ttyAMA1.
 img=$TOP/build/qemu-$variant.img
-name=vhusb-zero
+name=pi-usbridge
 [ "${VIRTUALHERE:-0}" = 1 ] && name=$name-virtualhere
 cp "$TOP/out/$name-$variant.img" "$img"
 cmdline=$(sed 's/serial0/ttyAMA1/' "$boot/cmdline.txt")

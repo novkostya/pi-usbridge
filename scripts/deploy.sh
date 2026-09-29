@@ -12,10 +12,10 @@
 #    running, network up (see /etc/init.d/trial). If it isn't within 90s, or it
 #    crashes or hangs, the next boot is the current version again.
 #
-#   ./build.sh debug && scripts/deploy.sh root@vhusb [debug|prod]
+#   ./build.sh debug && scripts/deploy.sh root@usbridge [debug|prod]
 #
 # The Pi must run the debug image (prod has no SSH). After deploying prod,
-# updates need the SD card again. Your settings on the card (vhusb.txt,
+# updates need the SD card again. Your settings on the card (usbridge.txt,
 # config.ini, authorized_keys, SSH host key) are kept.
 # Extra ssh options go in SSH_OPTS, e.g. SSH_OPTS="-p 2222".
 
@@ -31,7 +31,7 @@ ssh_() { ssh ${SSH_OPTS:-} -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveI
 port_open() { timeout 1 bash -c "echo > /dev/tcp/${host#*@}/$1" 2>/dev/null; }
 die() { echo "error: $*" >&2; exit 1; }
 
-files=$(cd "$boot" && find . -type f | sed 's|^\./||' | grep -v -x -e vhusb.txt -e config.ini | sort)
+files=$(cd "$boot" && find . -type f | sed 's|^\./||' | grep -v -x -e usbridge.txt -e config.ini | sort)
 manifest=$(cd "$boot" && for f in $files; do md5sum "$f"; done)
 
 # While /boot is writable, pause the Pi's only other writer during a deploy

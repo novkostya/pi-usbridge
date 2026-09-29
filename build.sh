@@ -194,7 +194,7 @@ initramfs() {
 	cp -a "$TOP/rootfs/common/." "$root/"
 	server=usbip
 	[ "$VIRTUALHERE" = 1 ] && server=virtualhere
-	printf '# The USB server when vhusb.txt sets none (build.sh)\nSERVER_DEFAULT=%s\n' "$server" > "$root/etc/build.env"
+	printf '# The USB server when usbridge.txt sets none (build.sh)\nSERVER_DEFAULT=%s\n' "$server" > "$root/etc/build.env"
 	if [ "$variant" = debug ]; then
 		cp -a "$TOP/rootfs/debug/." "$root/"
 		cp "$BUILD/dropbear-$DROPBEAR_VERSION/dropbearmulti" "$root/usr/sbin/"
@@ -227,7 +227,7 @@ initramfs() {
 image() {
 	variant=$1
 	boot=$OUT/$variant/boot
-	name=vhusb-zero
+	name=pi-usbridge
 	[ "$VIRTUALHERE" = 1 ] && name=$name-virtualhere
 	img=$OUT/$name-$variant.img
 	msg "image ($variant)"
@@ -244,7 +244,7 @@ image() {
 	# the bigger file faster than it can decompress the small one (-1.7s).
 	firmware boot/kernel8.img
 	gzip -dc "$FW/boot/kernel8.img" > "$boot/kernel8.img"
-	cp "$TOP/boot/config.txt" "$TOP/boot/vhusb.txt" "$boot/"
+	cp "$TOP/boot/config.txt" "$TOP/boot/usbridge.txt" "$boot/"
 	if [ "$variant" = debug ]; then
 		cat "$TOP/boot/config-debug.txt" >> "$boot/config.txt"
 		cp "$TOP/boot/cmdline-debug.txt" "$boot/cmdline.txt"
@@ -260,7 +260,7 @@ image() {
 	# scripts/deploy.sh to upload a second copy of the 29 MiB kernel.
 	size_mb=128
 	rm -f "$img" "$img.vfat"
-	mkfs.vfat --invariant -C -n VHUSB "$img.vfat" $(( (size_mb - 1) * 1024 )) >/dev/null
+	mkfs.vfat --invariant -C -n USBRIDGE "$img.vfat" $(( (size_mb - 1) * 1024 )) >/dev/null
 	# One by one in a fixed order and with fixed times: reproducible layout.
 	find "$boot" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
 	(cd "$boot" && find . -mindepth 1 -type d | LC_ALL=C sort) | while read -r d; do
@@ -270,7 +270,7 @@ image() {
 		mcopy -m -i "$img.vfat" "$boot/${f#./}" "::/${f#./}"
 	done
 	truncate -s ${size_mb}M "$img"
-	printf 'label: dos\nlabel-id: 0x56485553\nstart=2048, type=c, bootable\n' | sfdisk -q "$img"
+	printf 'label: dos\nlabel-id: 0x55534252\nstart=2048, type=c, bootable\n' | sfdisk -q "$img"
 	dd if="$img.vfat" of="$img" bs=1M seek=1 conv=notrunc status=none
 	rm "$img.vfat"
 	echo "    $img"

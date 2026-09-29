@@ -3,9 +3,9 @@
 # disconnect (Pi rebooted, device replugged); this attaches within ~2 s of
 # the Pi offering a device. setup.ps1 runs it at startup as a scheduled task.
 #
-#   usbip-attach.ps1 [-Server vhusb.lan] [-Port 3240]
+#   usbip-attach.ps1 [-Server usbridge.lan] [-Port 3240]
 param(
-	[string]$Server = 'vhusb.lan',
+	[string]$Server = 'usbridge.lan',
 	[int]$Port = 3240
 )
 $usbip = Join-Path $env:ProgramFiles 'USBip\usbip.exe'
@@ -29,7 +29,7 @@ while ($true) {
 		# "   1-1.3   : Sony Corp. : DualSense ..." lines from the Pi's list
 		$offered = @(& $usbip -t $Port list -r $Server 2>$null |
 			ForEach-Object { if ($_ -match '^\s*(\d+-[\d.]+)\s+:') { $Matches[1] } })
-		# "-> usbip://vhusb.lan:3240/1-1.3" lines for what's attached here
+		# "-> usbip://usbridge.lan:3240/1-1.3" lines for what's attached here
 		$attached = @(& $usbip port 2>$null |
 			ForEach-Object { if ($_ -match "$url(\S+)") { $Matches[1] } })
 		foreach ($busid in $offered) {

@@ -2,7 +2,7 @@
 # Load a Pi's USB and network like a game streaming to a DualSense does, and
 # report whether it held up. Use it to check kernel/firmware updates.
 #
-#   ./build.sh loadtest && scripts/loadtest.sh root@vhusb [minutes] [storm]
+#   ./build.sh loadtest && scripts/loadtest.sh root@usbridge [minutes] [storm]
 #
 # Needs the debug image on the Pi and a DualSense plugged into it. It stays
 # silent: the reports turn the motors and trigger effects off and the audio

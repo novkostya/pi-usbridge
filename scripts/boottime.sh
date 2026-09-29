@@ -1,12 +1,12 @@
 #!/bin/bash
 # Reboot a Pi running the debug image and show where the boot time goes.
 #
-#   scripts/boottime.sh root@vhusb [runs]
+#   scripts/boottime.sh root@usbridge [runs]
 #
 # "total" runs from the Pi dropping off the network (reset) until its USB
 # server accepts connections (usbipd: port 3240, vhusbd: 7575). Kernel
 # milestones come from dmesg,
-# including the "vhusb:" marks written by the boot scripts; whatever is left
+# including the "usbridge:" marks written by the boot scripts; whatever is left
 # before the kernel's first timestamp is the GPU firmware loading it.
 
 set -eu
@@ -40,8 +40,8 @@ for _ in $(seq "$runs"); do
 		/Run \/init/            { init = t($0) }
 		/ eth0: v[0-9]/         { eth = t($0) }
 		/carrier on/ && !link   { link = t($0) }
-		/vhusb: dhcp bound/     { lease = t($0) }
-		/vhusb: starting (vhusbd|usbipd)/ { vh = t($0) }
+		/usbridge: dhcp bound/     { lease = t($0) }
+		/usbridge: starting (vhusbd|usbipd)/ { vh = t($0) }
 		END {
 			# Serving = the server running and the Pi having an address.
 			# vhusbd waits for the lease; usbipd starts before it.

@@ -32,9 +32,9 @@ else
 	echo "rc: boot partition not found, using defaults"
 fi
 
-# /boot/vhusb.txt: key=value lines, see the template on the SD card.
-hostname=vhusb ip=dhcp gateway='' dns='' mac='' netwatch=60 server=${SERVER_DEFAULT:-usbip} allow='' devices=''
-if [ -f /boot/vhusb.txt ]; then
+# /boot/usbridge.txt: key=value lines, see the template on the SD card.
+hostname=usbridge ip=dhcp gateway='' dns='' mac='' netwatch=60 server=${SERVER_DEFAULT:-usbip} allow='' devices=''
+if [ -f /boot/usbridge.txt ]; then
 	cr=$(printf '\r')
 	while IFS='=' read -r key val || [ -n "$key" ]; do
 		val=${val%%#*}
@@ -45,7 +45,7 @@ if [ -f /boot/vhusb.txt ]; then
 			hostname|ip|gateway|dns|mac|netwatch|server) [ -n "$1" ] && eval "$key=\$1" ;;
 			allow|devices) eval "$key=\$*" ;;
 		esac
-	done < /boot/vhusb.txt
+	done < /boot/usbridge.txt
 fi
 hostname "$hostname"
 echo "$hostname" > /etc/hostname

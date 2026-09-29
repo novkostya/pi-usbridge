@@ -1,4 +1,4 @@
-# vhusb-zero
+# pi-usbridge
 
 A tiny, single-purpose SD card image that turns a **Raspberry Pi Zero 2 W** into a
 network USB hub: whatever you plug into it shows up on your PC. It speaks
@@ -20,7 +20,7 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
 - **Boots fast.** About 9 seconds from power-on to serving (see
   [Boot time](#boot-time)).
 - **Just works on any network.** Gets its address over DHCP and sends its
-  hostname, so your router's DNS knows it as `vhusb`. Plugged straight into a
+  hostname, so your router's DNS knows it as `usbridge`. Plugged straight into a
   PC without a router, it takes a link-local 169.254.x.x address like the PC
   does. Static IP is one line in a text file.
 - **Built for low latency.** CPU pinned at full speed, USB autosuspend off.
@@ -55,9 +55,9 @@ with `EXTRA_MODULES`, see [Building](#building)).
    ```sh
    ./build.sh prod        # or: ./build.sh debug, or ./build.sh for both
    ```
-2. Flash `out/vhusb-zero-prod.img` to an SD card with Raspberry Pi Imager,
+2. Flash `out/pi-usbridge-prod.img` to an SD card with Raspberry Pi Imager,
    balenaEtcher or `dd`.
-3. Optional: edit `vhusb.txt` on the SD card's `VHUSB` partition: hostname,
+3. Optional: edit `usbridge.txt` on the SD card's `USBRIDGE` partition: hostname,
    static IP, which PCs may connect, ... (see [Settings](#settings)).
 4. Boot the Pi. When the green LED stops blinking and stays on, it has an IP
    address and the server is up.
@@ -69,10 +69,10 @@ For VirtualHere instead, see [VirtualHere](#virtualhere).
 
 ## Settings
 
-`vhusb.txt` on the SD card:
+`usbridge.txt` on the SD card:
 
 ```ini
-hostname=vhusb             # sent to the DHCP server, so the router's DNS knows the Pi as "vhusb"
+hostname=usbridge          # sent to the DHCP server, so the router's DNS knows the Pi as "usbridge"
 ip=dhcp                    # or a static address: 192.168.1.50/24 (/24 if left out)
 gateway=192.168.1.1        # static only
 dns=192.168.1.1            # static only
@@ -115,19 +115,19 @@ checked against its checksum) and a startup task that attaches everything the
 Pi shares. In PowerShell as administrator, in the folder with both scripts:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File setup.ps1 -Server vhusb.lan
+powershell -ExecutionPolicy Bypass -File setup.ps1 -Server usbridge.lan
 ```
 
 `-Server` is the Pi's name (or address) as the PC sees it; with most routers
-that's `vhusb.lan` or plain `vhusb`. usbip-win2 reattaches devices by itself,
+that's `usbridge.lan` or plain `usbridge`. usbip-win2 reattaches devices by itself,
 but waits a fixed 30 s after every disconnect; the task
 ([usbip-attach.ps1](windows/usbip-attach.ps1)) attaches a device within ~2 s
 of the Pi offering it instead. Measured with a DualSense: unplugged and
 plugged back in, working again after 1.5–3 s; Pi rebooted, 13 s from the
 reboot command. A device another PC is using is retried until it's free.
 
-By hand, `usbip list -r vhusb.lan` shows what the Pi shares and
-`usbip attach -r vhusb.lan -b 1-1.3` attaches it (`usbip.exe` is in
+By hand, `usbip list -r usbridge.lan` shows what the Pi shares and
+`usbip attach -r usbridge.lan -b 1-1.3` attaches it (`usbip.exe` is in
 `C:\Program Files\USBip`).
 
 usbip-win2's release drivers are signed by Microsoft, so they load with
@@ -138,7 +138,7 @@ Secure Boot on and without test mode, which games with anti-cheat
 
 Linux has the client built in (`vhci-hcd` and the `usbip` tool, from your
 distribution's `usbip` or `linux-tools` package):
-`usbip attach -r vhusb -b 1-1.3`. Not tested with this server yet.
+`usbip attach -r usbridge -b 1-1.3`. Not tested with this server yet.
 
 ### The usbip-host fix
 
@@ -171,14 +171,14 @@ of `usbipd`. VirtualHere's server is proprietary, so release images don't
 include it; build your own:
 
 ```sh
-VIRTUALHERE=1 ./build.sh   # -> out/vhusb-zero-virtualhere-{prod,debug}.img
+VIRTUALHERE=1 ./build.sh   # -> out/pi-usbridge-virtualhere-{prod,debug}.img
 ```
 
 That downloads `vhusbdarm64` from VirtualHere's site onto your machine, puts
 it on the image and makes `server=virtualhere` the default. (Or, on any
 image: copy [vhusbdarm64](https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64)
-onto the SD card and set `server=virtualhere` in `vhusb.txt`.) Clients find
-the server by themselves (Bonjour), or add `vhusb:7575` by hand. The free
+onto the SD card and set `server=virtualhere` in `usbridge.txt`.) Clients find
+the server by themselves (Bonjour), or add `usbridge:7575` by hand. The free
 version shares one device at a time; a
 [license](https://www.virtualhere.com/purchase) removes that limit.
 
@@ -246,7 +246,7 @@ With the debug image, you can update the Pi over SSH instead of reflashing
 the card:
 
 ```sh
-./build.sh debug && scripts/deploy.sh root@vhusb
+./build.sh debug && scripts/deploy.sh root@usbridge
 ```
 
 A broken update can't brick it:
@@ -262,8 +262,8 @@ A broken update can't brick it:
    brings back the previous version, and `deploy.sh` shows why the trial
    failed.
 
-Your settings on the card (`vhusb.txt`, `config.ini`, `authorized_keys`, SSH
-host key) are kept. `scripts/deploy.sh root@vhusb prod` switches to the prod
+Your settings on the card (`usbridge.txt`, `config.ini`, `authorized_keys`, SSH
+host key) are kept. `scripts/deploy.sh root@usbridge prod` switches to the prod
 image the same way. Prod has no SSH, so after that, updates need the SD card
 again.
 
@@ -305,7 +305,7 @@ and Ethernet link negotiation.
 firmware (bootcode.bin, start_cd.elf)
   └─ kernel8.img + initramfs.cpio.gz (stock Raspberry Pi kernel, busybox userland)
        └─ /init = busybox init, reads /etc/inittab
-            ├─ /etc/rc (once): mount, load drivers, read /boot/vhusb.txt, start DHCP
+            ├─ /etc/rc (once): mount, load drivers, read /boot/usbridge.txt, start DHCP
             ├─ /etc/init.d/usbipd          (server=usbip; restarted if it exits)
             ├─ /etc/init.d/vhusbd          (server=virtualhere; restarted if it exits)
             ├─ /etc/init.d/persist-config  (saves config.ini changes to the SD card)
@@ -348,7 +348,7 @@ Needs an x86_64 Linux host. On Debian/Ubuntu:
 ```sh
 sudo apt install build-essential curl cpio bzip2 xz-utils dosfstools mtools fdisk \
   patch flex bison bc
-./build.sh            # both variants -> out/vhusb-zero-{prod,debug}.img
+./build.sh            # both variants -> out/pi-usbridge-{prod,debug}.img
 ```
 
 No root needed: it works in an unprivileged container. Downloads are cached in
@@ -391,7 +391,7 @@ Before trusting a new kernel or firmware, drive the USB and network the way a
 game does, with a DualSense plugged into a Pi running the debug image:
 
 ```sh
-./build.sh loadtest && scripts/loadtest.sh root@vhusb 15
+./build.sh loadtest && scripts/loadtest.sh root@usbridge 15
 ```
 
 It sends output reports (rumble, triggers, lightbar) at 250 Hz and streams

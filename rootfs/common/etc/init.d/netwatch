@@ -4,7 +4,7 @@
 # driver we saw the USB bus stall until a power cycle, with the network
 # barely alive (300-500 ms, some loss, the odd fast reply); this covers
 # anything like that. Checks every 5 s; reboots when 3/4 of the checks in
-# the window (`netwatch=` seconds in vhusb.txt, 0 = off) failed. Does
+# the window (`netwatch=` seconds in usbridge.txt, 0 = off) failed. Does
 # nothing until a gateway is known or while the cable is unplugged.
 
 . /etc/functions

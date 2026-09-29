@@ -9,7 +9,7 @@ led() {
 
 # Boot milestone in the kernel log (`dmesg`), timestamped like kernel messages.
 mark() {
-	echo "vhusb: $*" > /dev/kmsg 2>/dev/null
+	echo "usbridge: $*" > /dev/kmsg 2>/dev/null
 }
 
 # boot_rw CMD [ARGS...]: run CMD with the SD card's /boot writable, then

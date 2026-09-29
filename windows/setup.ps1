@@ -3,12 +3,12 @@
 # Pi's USB devices attached (usbip-attach.ps1). Run in PowerShell as
 # administrator:
 #
-#   powershell -ExecutionPolicy Bypass -File setup.ps1 [-Server vhusb.lan]
+#   powershell -ExecutionPolicy Bypass -File setup.ps1 [-Server usbridge.lan]
 #
 # Undo: Unregister-ScheduledTask 'pi-usbridge attach'; uninstall "USBip" in
 # Settings > Apps; delete $env:ProgramData\pi-usbridge.
 param(
-	[string]$Server = 'vhusb.lan'
+	[string]$Server = 'usbridge.lan'
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
