@@ -1,8 +1,8 @@
-From c69d7e0554157b28f666186a3c87eea70848f251 Mon Sep 17 00:00:00 2001
+From b456884ee5b1ce5cee473e77edb35b2794b23a23 Mon Sep 17 00:00:00 2001
 From: Konstantin Novikov <novkostya@gmail.com>
 Date: Tue, 29 Sep 2026 18:42:58 +0000
-Subject: [PATCH] usbip: stub_rx: take the interval of periodic URBs from the
- endpoint
+Subject: [PATCH] usbip: stub_rx: take the interval of periodic URBs from
+ the endpoint
 
 CMD_SUBMIT carries an interval, which stub_recv_cmd_submit() copies into
 the URB through usbip_pack_pdu(). The protocol documentation doesn't say
@@ -25,15 +25,26 @@ Take the interval of interrupt and isochronous URBs from the endpoint
 descriptor, as usbfs does, instead of the client's. For Linux clients
 it's the value they send anyway.
 
+Tested with the DualSense on a Raspberry Pi Zero 2 W (6.18) and
+usbip-win2 0.9.8.1 on Windows 11: the audio URBs take 10 ms each and the
+input endpoint is polled every 4 ms, as the descriptors say, and the
+haptics feel as they do with the controller served from usbfs.
+
 Fixes: 4d7b5c7f8ad4 ("Staging: USB/IP: add host driver")
 Cc: stable@vger.kernel.org
 Signed-off-by: Konstantin Novikov <novkostya@gmail.com>
 ---
+Notes for reviewers (not part of the commit):
+
+usbip-win2 could also send an interval in URB units, and I'll report it
+there, but taking it from the endpoint on this side works whatever the
+client sends. Patch 1 of this series touches the same loop.
+
  drivers/usb/usbip/stub_rx.c | 31 +++++++++++++++++++++++++++++++
  1 file changed, 31 insertions(+)
 
 diff --git a/drivers/usb/usbip/stub_rx.c b/drivers/usb/usbip/stub_rx.c
-index dc68a1d..9527553 100644
+index 23dc08a..39f70fc 100644
 --- a/drivers/usb/usbip/stub_rx.c
 +++ b/drivers/usb/usbip/stub_rx.c
 @@ -396,6 +396,26 @@ err_ret:
