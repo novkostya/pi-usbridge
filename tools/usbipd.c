@@ -263,10 +263,11 @@ static int bind_host(const char *busid)
 
 static void import(int fd, const char *peer)
 {
-	char busid[BUSID_SIZE + 1] = "", path[PATH_MAX], buf[16];
+	char busid[BUSID_SIZE + 1] = "", asked[BUSID_SIZE + 1], path[PATH_MAX], buf[16];
 	if (recv_all(fd, busid, BUSID_SIZE) < 0)
 		return;
 	busid[BUSID_SIZE] = 0;
+	strcpy(asked, busid);
 	if (!exported(busid)) {
 		/* Clients remember the bus ID, which changes with the USB port.
 		 * With one exported device plugged in, serve it whatever they ask. */
@@ -301,6 +302,9 @@ static void import(int fd, const char *peer)
 	setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &user_timeout, sizeof(user_timeout));
 	uint8_t dev[DEVICE_SIZE];
 	describe(busid, dev, 0);
+	/* Clients check that the reply names the bus ID they asked for. */
+	memset(dev + 256, 0, BUSID_SIZE);
+	memcpy(dev + 256, asked, strlen(asked));
 	if (reply(fd, OP_REP_IMPORT, ST_OK) < 0 || send_all(fd, dev, sizeof(dev)) < 0)
 		return;
 	snprintf(path, sizeof(path), SYS_DEVICES "/%s/usbip_sockfd", busid);
