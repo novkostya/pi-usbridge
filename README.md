@@ -1,9 +1,10 @@
 # vhusb-zero
 
 A tiny, single-purpose SD card image that turns a **Raspberry Pi Zero 2 W** into a
-network USB port for a game controller. It speaks **USB/IP**, the open protocol
-built into Linux, with a small server of its own; or runs the
-[VirtualHere](https://www.virtualhere.com) server instead.
+network USB hub: whatever you plug into it shows up on your PC. It speaks
+**USB/IP**, the open protocol built into Linux, with a small server of its
+own; or, built with one option, runs the [VirtualHere](https://www.virtualhere.com)
+server instead.
 
 I use it to plug a DualSense controller into a Pi next to the TV and play on a
 headless gaming VM through Moonlight. Because the whole USB device goes over the
@@ -12,8 +13,8 @@ network, everything works: adaptive triggers, haptics, touchpad, speaker and mic
 - **Open by default.** USB/IP with Linux's own `usbip-host` driver doing the
   work, a ~90 KB server, and [usbip-win2](https://github.com/vadimgrn/usbip-win2)
   on Windows (Microsoft-signed drivers, so no test mode, and anti-cheat is
-  fine). Only the controller is shared, never the Pi's own network adapter,
-  and you can limit which PCs may connect. See [USB/IP](#usbip).
+  fine). Shares everything plugged in, like VirtualHere, except the Pi's own
+  hub and network adapter. See [USB/IP](#usbip).
 - **Runs from RAM.** The whole system is a ~250 KB initramfs. The SD card is only
   read at boot, so pulling the power is safe and the card doesn't wear out.
 - **Boots fast.** About 9 seconds from power-on to serving (see
@@ -58,14 +59,13 @@ with `EXTRA_MODULES`, see [Building](#building)).
    balenaEtcher or `dd`.
 3. Optional: edit `vhusb.txt` on the SD card's `VHUSB` partition: hostname,
    static IP, which PCs may connect, ... (see [Settings](#settings)).
-4. Boot the Pi with the controller plugged in. When the green LED stops
-   blinking and stays on, it has an IP address and the server is up.
+4. Boot the Pi. When the green LED stops blinking and stays on, it has an IP
+   address and the server is up.
 5. On the Windows PC, run [windows/setup.ps1](windows/setup.ps1) once as
-   administrator (see [USB/IP](#usbip)). From then on the controller plugged
+   administrator (see [Windows](#windows)). From then on, whatever you plug
    into the Pi shows up on the PC by itself.
 
-For VirtualHere instead, set `server=virtualhere` in `vhusb.txt` and see
-[VirtualHere](#virtualhere).
+For VirtualHere instead, see [VirtualHere](#virtualhere).
 
 ## Settings
 
@@ -77,9 +77,9 @@ ip=dhcp                    # or a static address: 192.168.1.50/24 (/24 if left o
 gateway=192.168.1.1        # static only
 dns=192.168.1.1            # static only
 mac=                       # empty: adapter's own; "serial": stable MAC derived from the Pi's serial; or 02:12:34:56:78:9a
-server=usbip               # or "virtualhere"
+server=usbip               # or "virtualhere" (the default in VIRTUALHERE=1 builds)
 allow=                     # usbip: PCs that may connect, e.g. "192.168.1.20 192.168.1.0/24"; empty: anyone
-devices=                   # usbip: vendor:product IDs to share; empty: DualSense and DualSense Edge
+devices=                   # usbip: share only these vendor:product IDs, e.g. "054c:0ce6"; empty: everything
 netwatch=60                # reboot if the gateway is (mostly) unreachable/slow this long (seconds, 0 = off)
 ```
 
@@ -95,12 +95,12 @@ client's two questions, "what do you have?" and "give me that one", and then
 hands the connection to Linux's `usbip-host` driver, which carries all the
 USB traffic from then on. The server:
 
-- shares only the devices in `devices=` (by default the DualSense and the
-  DualSense Edge), and never a hub or a network adapter, whatever the
-  setting says, so no client can take the Pi's own network away;
-- lets in only the PCs in `allow=`, if set. USB/IP has no passwords or
-  encryption of its own, so this is an IP check; keep the Pi on a network
-  you trust, as with VirtualHere;
+- shares every USB device plugged into the Pi, or only those in `devices=`,
+  but never a hub or a network adapter, so no client can take the Pi's own
+  network away;
+- lets anyone who can reach it connect, like VirtualHere, or only the PCs in
+  `allow=`. USB/IP has no passwords or encryption of its own, so that's an IP
+  check; keep the Pi on a network you trust;
 - serves the one shared device whatever bus ID a client asks for, so moving
   the controller to another USB port of the Pi doesn't break anything;
 - drops a PC that goes away without saying so (VM powered off, cable pulled)
@@ -111,19 +111,20 @@ It logs to the kernel log: `dmesg | grep usbipd` on the debug image.
 ### Windows
 
 [windows/setup.ps1](windows/setup.ps1) installs usbip-win2 (pinned version,
-checked against its checksum) and a startup task that keeps the controller
-attached. In PowerShell as administrator, in the folder with both scripts:
+checked against its checksum) and a startup task that attaches everything the
+Pi shares. In PowerShell as administrator, in the folder with both scripts:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1 -Server vhusb.lan
 ```
 
 `-Server` is the Pi's name (or address) as the PC sees it; with most routers
-that's `vhusb.lan` or plain `vhusb`. usbip-win2 reattaches the controller by
-itself, but waits a fixed 30 s after every disconnect; the task
-([usbip-attach.ps1](windows/usbip-attach.ps1)) attaches it within ~2 s of the
-Pi offering it instead. Measured: controller unplugged and plugged back in,
-working again after 1.5 s; Pi rebooted, 13 s from the reboot command.
+that's `vhusb.lan` or plain `vhusb`. usbip-win2 reattaches devices by itself,
+but waits a fixed 30 s after every disconnect; the task
+([usbip-attach.ps1](windows/usbip-attach.ps1)) attaches a device within ~2 s
+of the Pi offering it instead. Measured with a DualSense: unplugged and
+plugged back in, working again after 1.5–3 s; Pi rebooted, 13 s from the
+reboot command. A device another PC is using is retried until it's free.
 
 By hand, `usbip list -r vhusb.lan` shows what the Pi shares and
 `usbip attach -r vhusb.lan -b 1-1.3` attaches it (`usbip.exe` is in
@@ -165,13 +166,20 @@ broke; in QEMU (below) it fails with the stock module and passes with ours.
 
 ## VirtualHere
 
-With `server=virtualhere`, the Pi runs the
-[VirtualHere](https://www.virtualhere.com) server instead of `usbipd`. It
-needs the server binary on the SD card as `vhusbdarm64`. It's already there
-unless you built with `VHUSBD=0` or used a release image; in that case
-download [vhusbdarm64](https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64)
-and copy it there. Clients find it by themselves (Bonjour), or add
-`vhusb:7575` by hand. The free version shares one device at a time; a
+The Pi can run the [VirtualHere](https://www.virtualhere.com) server instead
+of `usbipd`. VirtualHere's server is proprietary, so release images don't
+include it; build your own:
+
+```sh
+VIRTUALHERE=1 ./build.sh   # -> out/vhusb-zero-virtualhere-{prod,debug}.img
+```
+
+That downloads `vhusbdarm64` from VirtualHere's site onto your machine, puts
+it on the image and makes `server=virtualhere` the default. (Or, on any
+image: copy [vhusbdarm64](https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64)
+onto the SD card and set `server=virtualhere` in `vhusb.txt`.) Clients find
+the server by themselves (Bonjour), or add `vhusb:7575` by hand. The free
+version shares one device at a time; a
 [license](https://www.virtualhere.com/purchase) removes that limit.
 
 Its settings live in `config.ini` on the card (see the
@@ -349,13 +357,13 @@ No root needed: it works in an unprivileged container. Downloads are cached in
 (260 MB) for the usbip-host module and needs ~1.5 GB for it in `build/`.
 
 Builds are reproducible: building the same commit gives byte-identical
-images, so anyone can check a release image against the source. Images that
-include vhusbd are the exception: VirtualHere publishes it at an unversioned
-URL.
+images, so anyone can check a release image against the source.
+`VIRTUALHERE=1` images are the exception: VirtualHere publishes its server at
+an unversioned URL.
 
 Environment variables:
 
-- `VHUSBD=0`: don't put the VirtualHere binary on the image.
+- `VIRTUALHERE=1`: images that run VirtualHere's server (see [VirtualHere](#virtualhere)).
 - `EXTRA_MODULES="cdc_ether ..."`: add more kernel modules to the initramfs.
   They must be listed in `config/firmware.sha256`.
 
@@ -420,8 +428,9 @@ The scripts in this repository are MIT licensed. The images contain:
   sources pinned in `versions.sh`. The kernel is Raspberry Pi's prebuilt one;
   its `usbip-host` module is rebuilt with the patch in `patches/linux/`.
 - Raspberry Pi firmware (`LICENCE.broadcom`, redistributable).
-- Optionally the VirtualHere USB server, which is proprietary. Release images
-  are built with `VHUSBD=0` and don't include it; see [VirtualHere](#virtualhere).
+- With `VIRTUALHERE=1` only: the VirtualHere USB server, which is
+  proprietary, downloaded from its site at build time. Release images never
+  include it; see [VirtualHere](#virtualhere).
 
 On Windows, [usbip-win2](https://github.com/vadimgrn/usbip-win2) (GPL-3.0) is
 downloaded from its own releases by `windows/setup.ps1`.

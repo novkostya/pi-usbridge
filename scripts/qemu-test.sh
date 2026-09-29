@@ -6,8 +6,9 @@
 #
 #   EXTRA_MODULES=cdc_ether ./build.sh debug && scripts/qemu-test.sh debug
 #
-# The copy QEMU boots exports the keyboard (devices=0627:0001 in vhusb.txt),
-# so scripts/usbip-probe.py localhost can test USB/IP end to end.
+# scripts/usbip-probe.py localhost --attach tests USB/IP end to end with the
+# keyboard (the emulated network adapter must not be listed).
+# VIRTUALHERE=1: boot the VirtualHere image (VIRTUALHERE=1 ./build.sh debug).
 #
 # SSH: ssh -p 2222 root@localhost    USB/IP: localhost:3240
 # vhusbd (server=virtualhere): localhost:7575    Quit: Ctrl-a x
@@ -45,10 +46,9 @@ fdtput -t s "$test_dtb" / serial-number 00000000c0ffee42
 # expand serial0; with Bluetooth enabled in the Pi 3 DTB the PL011 UART is
 # ttyAMA1.
 img=$TOP/build/qemu-$variant.img
-cp "$TOP/out/vhusb-zero-$variant.img" "$img"
-settings=$TOP/build/qemu-vhusb.txt
-{ cat "$boot/vhusb.txt"; echo "devices=0627:0001"; } > "$settings"
-mcopy -o -i "$img@@1M" "$settings" ::/vhusb.txt
+name=vhusb-zero
+[ "${VIRTUALHERE:-0}" = 1 ] && name=$name-virtualhere
+cp "$TOP/out/$name-$variant.img" "$img"
 cmdline=$(sed 's/serial0/ttyAMA1/' "$boot/cmdline.txt")
 case $cmdline in *console=*) ;; *) cmdline="$cmdline console=ttyAMA1,115200" ;; esac
 

@@ -42,13 +42,13 @@ jobs:
           path: dl
           key: dl-${{ hashFiles('versions.sh', 'config/firmware.sha256') }}
 
-      # vhusbd is proprietary and not redistributed: users copy it onto the
-      # SD card themselves (see README).
+      # USB/IP images only. VirtualHere's server is proprietary and not
+      # redistributed: VIRTUALHERE=1 ./build.sh downloads it on your machine.
       - name: Build
-        run: VHUSBD=0 ./build.sh
+        run: ./build.sh
 
       # Builds are reproducible: SHA256SUMS lets anyone check these images
-      # against their own build of the same commit (with VHUSBD=0).
+      # against their own build of the same commit.
       - name: Checksums and compress
         run: |
           cd out

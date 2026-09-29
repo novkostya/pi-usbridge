@@ -1,15 +1,11 @@
-# Keeps the Pi's controller attached to this PC over USB/IP. usbip-win2
-# reattaches by itself too, but waits a fixed 30 s after every disconnect
-# (Pi rebooted, controller replugged); this attaches within ~2 s of the Pi
-# offering it again. setup.ps1 runs it at startup as a scheduled task.
+# Keeps the USB devices the Pi shares attached to this PC over USB/IP.
+# usbip-win2 reattaches by itself too, but waits a fixed 30 s after every
+# disconnect (Pi rebooted, device replugged); this attaches within ~2 s of
+# the Pi offering a device. setup.ps1 runs it at startup as a scheduled task.
 #
-#   usbip-attach.ps1 [-Server vhusb.lan] [-BusId 1-1.3]
-#
-# The Pi's usbipd serves its one controller whatever bus ID is asked for, so
-# the bus ID only matters with more than one controller plugged in.
+#   usbip-attach.ps1 [-Server vhusb.lan] [-Port 3240]
 param(
 	[string]$Server = 'vhusb.lan',
-	[string]$BusId = '1-1.3',
 	[int]$Port = 3240
 )
 $usbip = Join-Path $env:ProgramFiles 'USBip\usbip.exe'
@@ -25,15 +21,24 @@ function Reachable {
 	try { return $c.ConnectAsync($Server, $Port).Wait(700) } catch { return $false } finally { $c.Dispose() }
 }
 
-Say "started: $Server port $Port, bus ID $BusId"
-$last = ''
+$url = [regex]::Escape("usbip://${Server}:$Port/")
+$last = @{}  # last attach result per bus ID: log changes only
+Say "started: $Server port $Port"
 while ($true) {
-	$attached = (& $usbip port 2>$null) -match [regex]::Escape("usbip://${Server}:$Port/")
-	if (-not $attached -and (Reachable)) {
-		# "Device not found" while nothing is plugged into the Pi: log changes only.
-		$out = (& $usbip attach -r $Server -b $BusId --once 2>&1) -join ' '
-		if ($out -ne $last) { Say "attach: $out" }
-		$last = $out
+	if (Reachable) {
+		# "   1-1.3   : Sony Corp. : DualSense ..." lines from the Pi's list
+		$offered = @(& $usbip -t $Port list -r $Server 2>$null |
+			ForEach-Object { if ($_ -match '^\s*(\d+-[\d.]+)\s+:') { $Matches[1] } })
+		# "-> usbip://vhusb.lan:3240/1-1.3" lines for what's attached here
+		$attached = @(& $usbip port 2>$null |
+			ForEach-Object { if ($_ -match "$url(\S+)") { $Matches[1] } })
+		foreach ($busid in $offered) {
+			if ($attached -contains $busid) { continue }
+			# Fails while another PC has the device; retried every 2 s.
+			$out = (& $usbip -t $Port attach -r $Server -b $busid --once 2>&1) -join ' '
+			if ($last[$busid] -ne $out) { Say "attach ${busid}: $out" }
+			$last[$busid] = $out
+		}
 	}
 	Start-Sleep -Seconds 2
 }

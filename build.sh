@@ -7,7 +7,8 @@
 # (debug), and one kernel module, usbip-host, to carry a fix (patches/linux/).
 #
 # Environment:
-#   VHUSBD=0       don't download vhusbd into the image (see README "Licensing")
+#   VIRTUALHERE=1  build images that run the VirtualHere server instead of
+#                  USB/IP; downloads vhusbd from virtualhere.com (see README)
 #   EXTRA_MODULES  more kernel modules for the initramfs, e.g. "cdc_ether" (QEMU test)
 #   JOBS           parallel make jobs (default: nproc)
 
@@ -19,7 +20,7 @@ DL=$TOP/dl
 BUILD=$TOP/build
 OUT=$TOP/out
 JOBS=${JOBS:-$(nproc)}
-VHUSBD=${VHUSBD:-1}
+VIRTUALHERE=${VIRTUALHERE:-0}
 EXTRA_MODULES=${EXTRA_MODULES:-}
 FW=$DL/firmware-$FIRMWARE_TAG
 
@@ -191,6 +192,9 @@ initramfs() {
 		CONFIG_PREFIX="$root" install >/dev/null
 	ln -s bin/busybox "$root/init"
 	cp -a "$TOP/rootfs/common/." "$root/"
+	server=usbip
+	[ "$VIRTUALHERE" = 1 ] && server=virtualhere
+	printf '# The USB server when vhusb.txt sets none (build.sh)\nSERVER_DEFAULT=%s\n' "$server" > "$root/etc/build.env"
 	if [ "$variant" = debug ]; then
 		cp -a "$TOP/rootfs/debug/." "$root/"
 		cp "$BUILD/dropbear-$DROPBEAR_VERSION/dropbearmulti" "$root/usr/sbin/"
@@ -223,7 +227,9 @@ initramfs() {
 image() {
 	variant=$1
 	boot=$OUT/$variant/boot
-	img=$OUT/vhusb-zero-$variant.img
+	name=vhusb-zero
+	[ "$VIRTUALHERE" = 1 ] && name=$name-virtualhere
+	img=$OUT/$name-$variant.img
 	msg "image ($variant)"
 
 	for f in bootcode.bin start_cd.elf fixup_cd.dat \
@@ -238,14 +244,17 @@ image() {
 	# the bigger file faster than it can decompress the small one (-1.7s).
 	firmware boot/kernel8.img
 	gzip -dc "$FW/boot/kernel8.img" > "$boot/kernel8.img"
-	cp "$TOP/boot/config.txt" "$TOP/boot/vhusb.txt" "$TOP/boot/config.ini" "$boot/"
+	cp "$TOP/boot/config.txt" "$TOP/boot/vhusb.txt" "$boot/"
 	if [ "$variant" = debug ]; then
 		cat "$TOP/boot/config-debug.txt" >> "$boot/config.txt"
 		cp "$TOP/boot/cmdline-debug.txt" "$boot/cmdline.txt"
 	else
 		cp "$TOP/boot/cmdline.txt" "$boot/cmdline.txt"
 	fi
-	[ "$VHUSBD" = 1 ] && cp "$DL/vhusbdarm64" "$boot/vhusbdarm64"
+	if [ "$VIRTUALHERE" = 1 ]; then
+		cp "$TOP/boot/config.ini" "$boot/"
+		cp "$DL/vhusbdarm64" "$boot/vhusbdarm64"
+	fi
 
 	# 128 MiB image: MBR + one FAT partition starting at 1 MiB. Room for
 	# scripts/deploy.sh to upload a second copy of the 29 MiB kernel.
@@ -297,7 +306,7 @@ done
 
 toolchain
 usbip_host
-[ "$VHUSBD" = 1 ] && vhusbd
+[ "$VIRTUALHERE" = 1 ] && vhusbd
 for v in $variants; do
 	busybox "$v"
 	[ "$v" = debug ] && dropbear

@@ -1,14 +1,14 @@
 # Sets up this Windows PC as a client of the Pi: installs usbip-win2 (the
 # USB/IP client, Microsoft-signed drivers) and a startup task that keeps the
-# controller attached (usbip-attach.ps1). Run in PowerShell as administrator:
+# Pi's USB devices attached (usbip-attach.ps1). Run in PowerShell as
+# administrator:
 #
 #   powershell -ExecutionPolicy Bypass -File setup.ps1 [-Server vhusb.lan]
 #
 # Undo: Unregister-ScheduledTask 'pi-usbridge attach'; uninstall "USBip" in
 # Settings > Apps; delete $env:ProgramData\pi-usbridge.
 param(
-	[string]$Server = 'vhusb.lan',
-	[string]$BusId = '1-1.3'
+	[string]$Server = 'vhusb.lan'
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -46,12 +46,12 @@ if (Get-ScheduledTask $name -ErrorAction SilentlyContinue) {
 }
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (
 	"-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass " +
-	"-File `"$script`" -Server $Server -BusId $BusId")
+	"-File `"$script`" -Server $Server")
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
 	-RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
 	-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask $name -Action $action -Settings $settings `
 	-Trigger (New-ScheduledTaskTrigger -AtStartup) -User SYSTEM -RunLevel Highest | Out-Null
 Start-ScheduledTask $name
-Write-Host "Done: the controller plugged into the Pi ($Server) attaches to this PC."
+Write-Host "Done: USB devices plugged into the Pi ($Server) attach to this PC."
 Write-Host "Log: $dir\usbip-attach.log"

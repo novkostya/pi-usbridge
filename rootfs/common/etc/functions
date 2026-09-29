@@ -62,3 +62,4 @@ trial() {
 
 # Variant-specific settings (the debug image sets extra options here).
 [ -f /etc/variant.env ] && . /etc/variant.env
+[ -f /etc/build.env ] && . /etc/build.env

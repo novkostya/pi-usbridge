@@ -33,7 +33,7 @@ else
 fi
 
 # /boot/vhusb.txt: key=value lines, see the template on the SD card.
-hostname=vhusb ip=dhcp gateway='' dns='' mac='' netwatch=60 server=usbip allow='' devices=''
+hostname=vhusb ip=dhcp gateway='' dns='' mac='' netwatch=60 server=${SERVER_DEFAULT:-usbip} allow='' devices=''
 if [ -f /boot/vhusb.txt ]; then
 	cr=$(printf '\r')
 	while IFS='=' read -r key val || [ -n "$key" ]; do

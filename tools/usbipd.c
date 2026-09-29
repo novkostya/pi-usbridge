@@ -5,13 +5,12 @@
  *
  *   usbipd [-p PORT] [-a ADDR[/LEN]]... [-d VID:PID]...
  *
- * Only devices matching -d are listed or exported (default: DualSense and
- * DualSense Edge), and never hubs or network adapters, so the Pi can't be cut
- * off its network. With -a, only those clients may connect; without it,
- * anyone who can reach the port. A client asking for a bus ID that isn't
- * exported gets the one exported device when exactly one is plugged in, so
- * moving it to another USB port is fine. Clients that disappear are dropped
- * within ~10 s, freeing the device.
+ * All USB devices are exported, or only those matching -d; never hubs or
+ * network adapters, so the Pi can't be cut off its network. With -a, only
+ * those clients may connect; without it, anyone who can reach the port.
+ * A client asking for a bus ID that isn't exported gets the one exported
+ * device when exactly one is plugged in, so moving it to another USB port is
+ * fine. Clients that disappear are dropped within ~10 s, freeing the device.
  */
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -45,8 +44,8 @@
 #define DEVICE_SIZE 312 /* struct usbip_usb_device */
 #define TIMEOUT_MS 5000 /* for a client to send its request */
 
-static struct { uint16_t vid, pid; } devs[16] = { { 0x054c, 0x0ce6 }, { 0x054c, 0x0df2 } };
-static int ndevs = 2, devs_given;
+static struct { uint16_t vid, pid; } devs[16];
+static int ndevs; /* 0: all */
 static struct { struct in6_addr addr; int len; } allow[16];
 static int nallow;
 
@@ -119,11 +118,16 @@ static int exported(const char *busid)
 {
 	if (strchr(busid, ':') || !strncmp(busid, "usb", 3) || strlen(busid) >= BUSID_SIZE)
 		return 0;
+	char id[8];
+	if (read_attr(busid, "idVendor", id, sizeof(id)) < 0)
+		return 0;
+	if (attr(busid, "bDeviceClass", 16) == 0x09 || has_netdev(busid))
+		return 0;
 	unsigned vid = attr(busid, "idVendor", 16), pid = attr(busid, "idProduct", 16);
 	for (int i = 0; i < ndevs; i++)
 		if (devs[i].vid == vid && devs[i].pid == pid)
-			return attr(busid, "bDeviceClass", 16) != 0x09 && !has_netdev(busid);
-	return 0;
+			return 1;
+	return ndevs == 0;
 }
 
 static uint8_t *put16(uint8_t *p, unsigned v) { p[0] = v >> 8; p[1] = v; return p + 2; }
@@ -376,8 +380,6 @@ int main(int argc, char **argv)
 				fprintf(stderr, "bad device: %s\n", optarg);
 				return 1;
 			}
-			if (!devs_given++)
-				ndevs = 0;
 			devs[ndevs].vid = vid;
 			devs[ndevs++].pid = pid;
 		} else {
