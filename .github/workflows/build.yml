@@ -40,16 +40,23 @@ jobs:
       - name: Build
         run: VHUSBD=0 ./build.sh
 
-      - name: Compress
-        run: xz -T0 -9 out/*.img
+      # Builds are reproducible: SHA256SUMS lets anyone check these images
+      # against their own build of the same commit (with VHUSBD=0).
+      - name: Checksums and compress
+        run: |
+          cd out
+          sha256sum *.img > SHA256SUMS
+          xz -T0 -9 *.img
 
       - uses: actions/upload-artifact@v4
         with:
           name: images
-          path: out/*.img.xz
+          path: |
+            out/*.img.xz
+            out/SHA256SUMS
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" out/*.img.xz --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" out/*.img.xz out/SHA256SUMS --generate-notes
