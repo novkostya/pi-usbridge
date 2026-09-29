@@ -135,10 +135,14 @@ initramfs() {
 	if [ "$variant" = debug ]; then
 		cp -a "$TOP/rootfs/debug/." "$root/"
 		cp "$BUILD/dropbear-$DROPBEAR_VERSION/dropbearmulti" "$root/usr/sbin/"
+		"$(cross)gcc" -static -Os -s -o "$root/usr/bin/get_throttled" "$TOP/tools/get_throttled.c"
 		for p in dropbear dropbearkey scp; do ln -s dropbearmulti "$root/usr/sbin/$p"; done
 	fi
 	# r8152: the HAT's Ethernet. raspberrypi-hwmon: logs "Undervoltage detected!".
-	for m in r8152 raspberrypi-hwmon $EXTRA_MODULES; do
+	# usbmon (debug): USB traffic capture, /sys/kernel/debug/usb/usbmon.
+	modules="r8152 raspberrypi-hwmon"
+	[ "$variant" = debug ] && modules="$modules usbmon"
+	for m in $modules $EXTRA_MODULES; do
 		ko=$(awk -v m="/$m.ko.xz" 'index($2, m) { print $2 }' "$TOP/config/firmware.sha256")
 		[ -n "$ko" ] || die "module $m is not listed in config/firmware.sha256"
 		firmware "$ko"

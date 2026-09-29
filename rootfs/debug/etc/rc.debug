@@ -3,6 +3,7 @@
 
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts
+mount -t debugfs debugfs /sys/kernel/debug
 
 # System log in RAM: read with `logread` (-f to follow) and `dmesg`.
 syslogd -C512

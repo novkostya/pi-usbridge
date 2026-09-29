@@ -12,3 +12,4 @@ ba2e8d34524bcac1ffdc138d981fd4ce4f9498c4e01dc9c1ef701a473a08791e  boot/start_cd.
 1793ab1ee2cdec9c23a16485329acb8483aacbdcf766a09cb6fc4859dfcfd169  modules/6.18.50-v8+/kernel/drivers/hwmon/raspberrypi-hwmon.ko.xz
 65b2b14d2a2dcae5060f571d9d3736221594ceee506dc095b372a590068cb374  modules/6.18.50-v8+/kernel/drivers/net/usb/cdc_ether.ko.xz
 ce78e94e3394fa0f1bcc056988322397d2174b3cda71a8f25dc0bb14e99db822  modules/6.18.50-v8+/kernel/drivers/net/usb/r8152.ko.xz
+68574cbef4404bc41d0ce186a4dd0e6e866db4e09488453844e93b5a57566d3a  modules/6.18.50-v8+/kernel/drivers/usb/mon/usbmon.ko.xz
