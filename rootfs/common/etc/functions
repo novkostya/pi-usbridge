@@ -7,6 +7,11 @@ led() {
 	done
 }
 
+# Boot milestone in the kernel log (`dmesg`), timestamped like kernel messages.
+mark() {
+	echo "vhusb: $*" > /dev/kmsg 2>/dev/null
+}
+
 # First network interface other than loopback (the HAT's NIC is eth0).
 netif() {
 	for n in /sys/class/net/*; do

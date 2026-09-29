@@ -163,7 +163,7 @@ image() {
 	img=$OUT/vhusb-zero-$variant.img
 	msg "image ($variant)"
 
-	for f in bootcode.bin start_cd.elf fixup_cd.dat kernel8.img \
+	for f in bootcode.bin start_cd.elf fixup_cd.dat \
 		bcm2710-rpi-zero-2-w.dtb overlays/overlay_map.dtb \
 		overlays/disable-bt.dtbo overlays/disable-wifi.dtbo overlays/dwc2.dtbo \
 		LICENCE.broadcom COPYING.linux; do
@@ -171,6 +171,10 @@ image() {
 		mkdir -p "$(dirname "$boot/$f")"
 		cp "$FW/boot/$f" "$boot/$f"
 	done
+	# The kernel ships gzipped; store it uncompressed. The GPU firmware reads
+	# the bigger file faster than it can decompress the small one (-1.7s).
+	firmware boot/kernel8.img
+	gzip -dc "$FW/boot/kernel8.img" > "$boot/kernel8.img"
 	cp "$TOP/boot/config.txt" "$TOP/boot/vhusb.txt" "$TOP/boot/config.ini" "$boot/"
 	if [ "$variant" = debug ]; then
 		cat "$TOP/boot/config-debug.txt" >> "$boot/config.txt"
@@ -180,8 +184,9 @@ image() {
 	fi
 	[ "$VHUSBD" = 1 ] && cp "$DL/vhusbdarm64" "$boot/vhusbdarm64"
 
-	# 64 MiB image: MBR + one FAT partition starting at 1 MiB.
-	size_mb=64
+	# 128 MiB image: MBR + one FAT partition starting at 1 MiB. Room for
+	# scripts/deploy.sh to upload a second copy of the 29 MiB kernel.
+	size_mb=128
 	rm -f "$img" "$img.vfat"
 	mkfs.vfat -C -n VHUSB "$img.vfat" $(( (size_mb - 1) * 1024 )) >/dev/null
 	mcopy -s -i "$img.vfat" "$boot"/* ::/

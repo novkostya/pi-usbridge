@@ -32,17 +32,16 @@ fdtput -t s "$test_dtb" /soc/serial@7e201000/bluetooth status disabled
 # The firmware normally fills in the board serial number; vhusbd needs it.
 fdtput -t s "$test_dtb" / serial-number 00000000c0ffee42
 
-# QEMU wants a copy of the SD image it can write to and an uncompressed
-# kernel. There's no firmware to expand serial0; with Bluetooth enabled in the
-# Pi 3 DTB the PL011 UART is ttyAMA1.
+# QEMU wants a copy of the SD image it can write to. There's no firmware to
+# expand serial0; with Bluetooth enabled in the Pi 3 DTB the PL011 UART is
+# ttyAMA1.
 img=$TOP/build/qemu-$variant.img
 cp "$TOP/out/vhusb-zero-$variant.img" "$img"
-zcat "$boot/kernel8.img" > "$TOP/build/qemu-Image"
 cmdline=$(sed 's/serial0/ttyAMA1/' "$boot/cmdline.txt")
 case $cmdline in *console=*) ;; *) cmdline="$cmdline console=ttyAMA1,115200" ;; esac
 
 exec qemu-system-aarch64 -M raspi3b -nographic \
-	-kernel "$TOP/build/qemu-Image" -dtb "$test_dtb" -initrd "$boot/initramfs.cpio.gz" \
+	-kernel "$boot/kernel8.img" -dtb "$test_dtb" -initrd "$boot/initramfs.cpio.gz" \
 	-append "$cmdline earlycon=pl011,0x3f201000" \
 	-drive file="$img",if=sd,format=raw \
 	-usb -device usb-net,netdev=n0 \

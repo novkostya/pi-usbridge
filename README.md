@@ -120,20 +120,33 @@ Prod has no SSH, so after that, updates need the SD card again.
 
 ## Boot time
 
-Measured on a Zero 2 W + PoE HAT with the debug image, power-on to vhusbd
-accepting connections: about 17.5 s.
+About 8.9 s from power-on to vhusbd accepting connections (Zero 2 W +
+PoE HAT, measured with `scripts/boottime.sh`):
 
-| Stage                                   | Time   |
-| --------------------------------------- | ------ |
-| GPU firmware loads the kernel           | ~6.5 s |
-| kernel until `/init`                    | 2.6 s  |
-| USB hub + RTL8152 enumerate             | 2.2 s  |
-| Ethernet auto-negotiation (link up)     | 2.2 s  |
-| DHCP (switch starts forwarding + lease) | ~3 s   |
-| vhusbd starts                           | ~1 s   |
+| Stage                                  | Time   |
+| -------------------------------------- | ------ |
+| GPU firmware loads the kernel          | 3.5 s  |
+| kernel until `/init`                   | 1.5 s  |
+| USB hub + RTL8152 enumerate            | 1.3 s  |
+| Ethernet auto-negotiation (link up)    | 2.2 s  |
+| DHCP lease                             | 0.2 s  |
+| vhusbd starts                          | <0.1 s |
 
-The network steps dominate. If your switch supports it, making the Pi's port
-an edge/portfast port (no STP delay) saves a few seconds of DHCP time.
+What got it there (from ~17.5 s):
+
+- **Uncompressed kernel.** The GPU firmware reads the 29 MB kernel faster
+  than it decompresses the 10 MB gzipped one: -1.7 s.
+- **`initcall_blacklist=init_kprobe_trace,init_blk_tracer`.** At boot the
+  kernel updates all trace events in the background (~1.4 s on this CPU);
+  these two tracers waited for it and held up everything after them,
+  including USB. Neither is needed here: -0.8 s to `/init`, -1.4 s to Ethernet.
+- **Keep the DHCP lease.** Releasing it at shutdown made dnsmasq treat the
+  Pi as a new client every boot and ping the address for ~3 s before
+  answering. udhcpc also starts the moment the link comes up.
+- **No restart delay** before the first vhusbd start.
+
+The remaining time is mostly hardware: the GPU boot stage, USB enumeration
+and Ethernet link negotiation.
 
 ## How it works
 

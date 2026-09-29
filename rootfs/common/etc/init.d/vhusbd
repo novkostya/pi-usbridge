@@ -16,5 +16,8 @@ while [ $i -lt 150 ]; do
 	i=$((i + 1))
 done
 
-sleep 1 # don't spin if it crashes right away
+# Restarted by init after exiting: pause so a crash loop doesn't spin.
+[ -e /run/vhusbd.started ] && sleep 1
+: > /run/vhusbd.started
+mark "starting vhusbd"
 cd /etc/vhusbd && exec /usr/sbin/vhusbd -c /etc/vhusbd/config.ini

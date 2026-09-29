@@ -11,6 +11,7 @@ mount -t devtmpfs devtmpfs /dev
 
 . /etc/functions
 led timer
+mark "rc started"
 
 # Lower latency: run the CPU at full speed instead of scaling on demand.
 for g in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor; do
@@ -69,6 +70,7 @@ if [ -z "$iface" ]; then
 	exit 0
 fi
 echo "rc: using $iface"
+mark "$iface appeared"
 
 if [ "$mac" = serial ]; then
 	# Stable locally administered MAC derived from the Pi's serial number.
@@ -80,9 +82,19 @@ fi
 ip link set "$iface" up
 
 if [ "$ip" = dhcp ]; then
-	# Send a discover every second until answered: the link may still be
-	# negotiating, and switches often need a few seconds before forwarding.
-	udhcpc -f -R -i "$iface" -x "hostname:$hostname" -t 10 -T 1 -A 1 $UDHCPC_OPTS </dev/null >/dev/null 2>&1 &
+	# Start as soon as the link is up (auto-negotiation takes ~2s), so the
+	# first discover goes out right away; then one per second until
+	# answered. No -R (release on exit): keeping the lease lets dnsmasq
+	# answer at once on the next boot instead of first pinging the address
+	# for ~3s as it does for a new client.
+	(
+		i=0
+		while [ "$(cat "/sys/class/net/$iface/carrier" 2>/dev/null)" != 1 ] && [ $i -lt 200 ]; do
+			sleep 0.05
+			i=$((i + 1))
+		done
+		exec udhcpc -f -i "$iface" -x "hostname:$hostname" -t 10 -T 1 -A 1 $UDHCPC_OPTS
+	) </dev/null >/dev/null 2>&1 &
 else
 	ip addr add "$ip" dev "$iface"
 	[ -n "$gateway" ] && ip route add default via "$gateway"

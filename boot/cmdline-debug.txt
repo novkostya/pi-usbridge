@@ -1,1 +1,1 @@
-console=serial0,115200 usbcore.autosuspend=-1
+console=serial0,115200 usbcore.autosuspend=-1 initcall_blacklist=init_kprobe_trace,init_blk_tracer

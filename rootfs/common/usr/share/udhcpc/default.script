@@ -4,7 +4,8 @@
 
 . /etc/functions
 
-case "$1" in
+event=$1
+case "$event" in
 	deconfig)
 		ip -4 addr flush dev "$interface"
 		led timer
@@ -19,6 +20,7 @@ case "$1" in
 		: > /etc/resolv.conf
 		for d in $dns; do echo "nameserver $d" >> /etc/resolv.conf; done
 		led default-on
+		mark "dhcp $event $ip"
 		;;
 	leasefail|nak)
 		led timer
