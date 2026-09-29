@@ -69,11 +69,12 @@ function Mine {
 }
 
 # "ip:port" of every _usbip._tcp service on the LAN that names this PC as its
-# host. Asks from an ordinary port (an mDNS "legacy unicast" query), so the
-# answers come straight back here.
+# host. Asks from an ordinary port with the "unicast response" bit set, so the
+# answers come straight back here (Android's responder ignores plain
+# "legacy unicast" queries).
 $query = [byte[]](0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 6) + [Text.Encoding]::ASCII.GetBytes('_usbip') +
 	[byte[]](4) + [Text.Encoding]::ASCII.GetBytes('_tcp') + [byte[]](5) + [Text.Encoding]::ASCII.GetBytes('local') +
-	[byte[]](0, 0, 12, 0, 1)
+	[byte[]](0, 0, 12, 0x80, 1)
 function Exporters {
 	$mine = @(Mine)
 	$ptr = @{}; $srv = @{}; $txt = @{}; $a = @{}
