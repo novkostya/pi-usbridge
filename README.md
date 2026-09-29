@@ -143,6 +143,13 @@ usbip-win2's release drivers are signed by Microsoft, so they load with
 Secure Boot on and without test mode, which games with anti-cheat
 (EasyAntiCheat and others) refuse.
 
+The task also attaches the controllers of a phone or tablet streaming from
+this PC with [Moonlight USBridge](https://github.com/novkostya/moonlight-usbridge),
+a Moonlight fork that forwards its USB controllers over USB/IP while it
+streams. The fork advertises `_usbip._tcp` over mDNS, naming the PC it
+streams from; the task asks for that service every 2 s and attaches from the
+ones that name this PC.
+
 ### Linux
 
 Linux has the client built in (`vhci-hcd` and the `usbip` tool, from your
