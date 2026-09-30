@@ -52,7 +52,7 @@ Secure Boot on and without test mode, which games with anti-cheat
 (EasyAntiCheat and others) refuse.
 
 The task also attaches the controllers of a phone or tablet streaming from
-this PC with [Moonlight USBridge](https://github.com/novkostya/moonlight-usbridge),
+this PC with Moonlight USBridge,
 a Moonlight fork that forwards its USB controllers over USB/IP while it
 streams. The fork advertises `_usbip._tcp` over mDNS, naming the PC it
 streams from; the task asks for that service every 2 s and attaches from the

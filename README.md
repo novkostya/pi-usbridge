@@ -85,13 +85,6 @@ A running debug Pi can be updated without touching the card:
 The Pi boots the new version once and keeps it only if it comes up healthy.
 Otherwise it reverts to the previous one.
 
-## Moonlight USBridge
-
-The Windows task also attaches controllers from
-[Moonlight USBridge](https://github.com/novkostya/moonlight-usbridge), a
-Moonlight for Android fork that forwards the tablet's USB controllers to the
-PC it's streaming from.
-
 ## Documentation
 
 - [docs/usbip.md](docs/usbip.md): the server, the Windows client, and the
