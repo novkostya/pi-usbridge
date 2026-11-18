@@ -43,9 +43,11 @@ server knows (e.g. `usbridge.lan`): usbip-win2's driver looks names up with
 plain DNS only, not `.local`. The task looks the name up itself for that
 reason.
 
-A `.local` lookup takes Windows ~2.7 s when it isn't cached: it waits for an
-IPv6 address, which the Pi doesn't have, and ignores the Pi's answer saying
-so. The task keeps the address once it has it.
+For a `.local` name the task asks over mDNS itself, out of every network
+adapter, and the Pi answers within a millisecond. It doesn't use Windows' own
+lookup: that takes ~2.7 s, waiting for an IPv6 address the Pi doesn't have
+(it ignores the Pi's answer saying so). It also sometimes ignores the Pi's
+answers altogether for minutes after Windows starts.
 
 usbip-win2's release drivers are signed by Microsoft, so they load with
 Secure Boot on and without test mode, which games with anti-cheat

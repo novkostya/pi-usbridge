@@ -9,8 +9,9 @@
 #
 #   usbip-attach.ps1 [-Server usbridge.local] [-Port 3240] [-Once]
 #
-# It looks the name up itself and gives usbip the address: usbip-win2's
-# driver resolves names with plain DNS only, so not .local ones.
+# It looks the name up itself (over mDNS if it's a .local one) and gives
+# usbip the address: usbip-win2's driver resolves names with plain DNS only,
+# so not .local ones.
 param(
 	[string]$Server = 'usbridge.local',
 	[int]$Port = 3240,
@@ -22,16 +23,6 @@ $log = Join-Path $PSScriptRoot 'usbip-attach.log'
 function Say([string]$msg) {
 	if ((Test-Path $log) -and (Get-Item $log).Length -gt 100KB) { Remove-Item $log }
 	Add-Content $log "$(Get-Date -Format s) $msg"
-}
-
-# The Pi's IPv4 address, or $null. A .local lookup takes ~2.7 s (Windows
-# waits for an IPv6 address the Pi doesn't have) and Windows only caches it
-# for ~10 s, so the loop keeps the address while it answers.
-function Address {
-	try {
-		$a = [Net.Dns]::GetHostAddresses($Server) | Where-Object AddressFamily -eq 'InterNetwork'
-		return ($a | Select-Object -First 1).IPAddressToString
-	} catch { return $null }
 }
 
 function Reachable([string]$ip, [int]$port) {
@@ -68,19 +59,28 @@ function Mine {
 		ForEach-Object { $_.Address.IPAddressToString }
 }
 
-# "ip:port" of every _usbip._tcp service on the LAN that names this PC as its
-# host. Asks from an ordinary port with the "unicast response" bit set, so the
-# answers come straight back here (Android's responder ignores plain
-# "legacy unicast" queries).
-$query = [byte[]](0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 6) + [Text.Encoding]::ASCII.GetBytes('_usbip') +
-	[byte[]](4) + [Text.Encoding]::ASCII.GetBytes('_tcp') + [byte[]](5) + [Text.Encoding]::ASCII.GetBytes('local') +
-	[byte[]](0, 0, 12, 0x80, 1)
-function Exporters {
-	$mine = @(Mine)
-	$ptr = @{}; $srv = @{}; $txt = @{}; $a = @{}
+# The records that answer an mDNS query for $name of type $type (1: A, 12:
+# PTR) within 400 ms, each with the message it came in and where its data
+# starts. Asks from an ordinary port with the "unicast response" bit set, so
+# the answers come straight back here (Android's responder ignores plain
+# "legacy unicast" queries), and on every network adapter: left to Windows,
+# the query would go out of one only, maybe a VPN's.
+function Ask-Mdns([string]$name, [int]$type) {
+	$q = [byte[]](0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0)
+	foreach ($label in $name.Split('.')) {
+		$q += [byte[]]@($label.Length) + [Text.Encoding]::ASCII.GetBytes($label)
+	}
+	$q = [byte[]]($q + [byte[]](0, 0, $type, 0x80, 1))
+	$records = @()
 	$u = New-Object Net.Sockets.UdpClient(0)
 	try {
-		[void]$u.Send($query, $query.Length, '224.0.0.251', 5353)
+		foreach ($ip in Mine) {
+			if ($ip -like '127.*') { continue }
+			try {
+				$u.Client.SetSocketOption('IP', 'MulticastInterface', [Net.IPAddress]::Parse($ip).GetAddressBytes())
+				[void]$u.Send($q, $q.Length, '224.0.0.251', 5353)
+			} catch {}
+		}
 		$until = (Get-Date).AddMilliseconds(400)
 		while (($left = ($until - (Get-Date)).TotalMilliseconds) -gt 0) {
 			$u.Client.ReceiveTimeout = [Math]::Max(1, [int]$left)
@@ -88,30 +88,60 @@ function Exporters {
 			if ($m.Length -lt 12) { continue }
 			$pos = 12
 			for ($i = 0; $i -lt ($m[4] * 256 + $m[5]); $i++) { $pos = (Read-Name $m $pos)[1] + 4 }
-			$records = ($m[6] * 256 + $m[7]) + ($m[8] * 256 + $m[9]) + ($m[10] * 256 + $m[11])
-			for ($i = 0; $i -lt $records -and $pos + 10 -le $m.Length; $i++) {
+			$count = ($m[6] * 256 + $m[7]) + ($m[8] * 256 + $m[9]) + ($m[10] * 256 + $m[11])
+			for ($i = 0; $i -lt $count -and $pos + 10 -le $m.Length; $i++) {
 				$r = Read-Name $m $pos
-				$name = $r[0]; $pos = $r[1]
+				$pos = $r[1]
 				$type = $m[$pos] * 256 + $m[$pos + 1]
 				$gone = $m[$pos + 4] -eq 0 -and $m[$pos + 5] -eq 0 -and $m[$pos + 6] -eq 0 -and $m[$pos + 7] -eq 0
 				$len = $m[$pos + 8] * 256 + $m[$pos + 9]
 				$data = $pos + 10
 				$pos = $data + $len
 				if ($pos -gt $m.Length -or $gone) { continue }  # TTL 0: going away
-				switch ($type) {
-					12 { if ($name -eq '_usbip._tcp.local') { $ptr[(Read-Name $m $data)[0]] = 1 } }
-					33 { $srv[$name] = @(($m[$data + 4] * 256 + $m[$data + 5]), (Read-Name $m ($data + 6))[0]) }
-					16 {
-						for ($p = $data; $p -lt $data + $len; $p += 1 + $m[$p]) {
-							$kv = [Text.Encoding]::UTF8.GetString($m, $p + 1, $m[$p])
-							if ($kv -like 'host=*') { $txt[$name] = $kv.Substring(5) }
-						}
-					}
-					1 { $a[$name] = "$($m[$data]).$($m[$data + 1]).$($m[$data + 2]).$($m[$data + 3])" }
-				}
+				$records += [pscustomobject]@{ Name = $r[0]; Type = $type; Msg = $m; Data = $data; Len = $len }
 			}
 		}
 	} finally { $u.Close() }
+	return $records
+}
+
+# The Pi's IPv4 address, or $null. A .local name is asked over mDNS here
+# rather than through Windows, which takes ~2.7 s (it waits for an IPv6
+# address the Pi doesn't have) and at times ignores the Pi's answers for
+# minutes on end. Other names, and .local ones nothing answers here for (in
+# the hosts file, say), are left to Windows.
+function Address {
+	$name = $Server.TrimEnd('.')
+	if ($name -like '*.local') {
+		foreach ($r in Ask-Mdns $name 1) {
+			if ($r.Type -eq 1 -and $r.Name -eq $name) { return $r.Msg[$r.Data..($r.Data + 3)] -join '.' }
+		}
+	}
+	try {
+		$a = [Net.Dns]::GetHostAddresses($Server) | Where-Object AddressFamily -eq 'InterNetwork'
+		return ($a | Select-Object -First 1).IPAddressToString
+	} catch { return $null }
+}
+
+# "ip:port" of every _usbip._tcp service on the LAN that names this PC as its
+# host.
+function Exporters {
+	$mine = @(Mine)
+	$ptr = @{}; $srv = @{}; $txt = @{}; $a = @{}
+	foreach ($r in Ask-Mdns '_usbip._tcp.local' 12) {
+		$m = $r.Msg; $data = $r.Data
+		switch ($r.Type) {
+			12 { if ($r.Name -eq '_usbip._tcp.local') { $ptr[(Read-Name $m $data)[0]] = 1 } }
+			33 { $srv[$r.Name] = @(($m[$data + 4] * 256 + $m[$data + 5]), (Read-Name $m ($data + 6))[0]) }
+			16 {
+				for ($p = $data; $p -lt $data + $r.Len; $p += 1 + $m[$p]) {
+					$kv = [Text.Encoding]::UTF8.GetString($m, $p + 1, $m[$p])
+					if ($kv -like 'host=*') { $txt[$r.Name] = $kv.Substring(5) }
+				}
+			}
+			1 { $a[$r.Name] = $m[$data..($data + 3)] -join '.' }
+		}
+	}
 	foreach ($instance in $ptr.Keys) {
 		$s = $srv[$instance]
 		if ($s -and $a[$s[1]] -and $mine -contains $txt[$instance]) { "$($a[$s[1]]):$($s[0])" }
